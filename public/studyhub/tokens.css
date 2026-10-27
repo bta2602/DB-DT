@@ -1,0 +1,66 @@
+/* StudyHUB: общий источник визуальных токенов. Подключается до стилей компонентов. */
+:root {
+  color-scheme: light;
+  --bg: #f7f8f5;
+  --white: #ffffff;
+  --ink: #25332d;
+  --muted: #5e6c63;
+  --green: #2f6355;
+  --dark: #244d42;
+  --soft: #edf3ec;
+  --line: #dce3d9;
+  --control-border: #7b8e80;
+  --focus: #2f6355;
+  --amber: #805416;
+  --amber-bg: #fbf2e2;
+  --blue: #365e75;
+  --blue-bg: #edf2f6;
+  --red: #9c3d31;
+  --red-bg: #f9eeea;
+
+  --font-sans: Inter, "Segoe UI", Arial, sans-serif;
+  --font-mono: Consolas, "Courier New", monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-title: clamp(1.75rem, 3vw, 2.25rem);
+  --line-height: 1.6;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-sm: 8px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --touch-target: 44px;
+  --content-max: 1440px;
+  --shadow: 0 16px 60px #243d3220;
+
+  --surface: var(--white);
+  --text: var(--ink);
+  --primary: var(--green);
+  --primary-hover: var(--dark);
+  --primary-soft: var(--soft);
+  --border: var(--line);
+  --danger: var(--red);
+  --danger-soft: var(--red-bg);
+  --warning: var(--amber);
+  --warning-soft: var(--amber-bg);
+}
+
+/* Фокус должен оставаться видимым и на кнопках, и на ячейках журнала. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

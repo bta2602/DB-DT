@@ -28,7 +28,7 @@ if (!email || !nameParts.length) {
       `Почта: ${normalizedEmail}`,
       `Пароль: ${password}`,
       '',
-      'Локальный адрес: http://127.0.0.1:3000/studyhub/index.html',
+      'Локальный адрес: http://127.0.0.1:3000/',
       'Этот файл содержит пароль. Храните его у себя и не добавляйте в Git.',
       '',
     ].join('\n'), { flag: 'wx', mode: 0o600 });

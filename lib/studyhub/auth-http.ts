@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   AuthError, bootstrapFor, createGuestSession, matchesCsrf, readSession,
   registerStudent, saveDirectory, saveLesson, signIn, signOut, updateOwnProfile,
+  readLearningFile, reviewSubmission, saveAssignment, saveAttendance, saveGrade, saveSubmission,
 } from './auth-store.mjs';
 
 const COOKIE = 'studyhub_session';
@@ -200,5 +201,97 @@ export function lessonMutation(request: NextRequest, id = '') {
     if (id) fields.push('version');
     const input = await body(request, fields);
     return json(await saveLesson(session.user!, input, id));
+  });
+}
+
+export function gradeMutation(request: NextRequest, lessonId: string, studentId: string) {
+  return execute(request, async () => {
+    const session = mutationSession(request, true);
+    const input = await body(request, ['grade', 'version']);
+    return json(saveGrade(session.user!, lessonId, studentId, input));
+  });
+}
+
+export function attendanceMutation(request: NextRequest, lessonId: string) {
+  return execute(request, async () => {
+    const session = mutationSession(request, true);
+    const input = await body(request, ['entries', 'version']);
+    return json(saveAttendance(session.user!, lessonId, input));
+  });
+}
+
+export function reviewMutation(request: NextRequest, id: string) {
+  return execute(request, async () => {
+    const session = mutationSession(request, true);
+    const input = await body(request, ['action', 'grade', 'comment', 'version']);
+    return json(reviewSubmission(session.user!, id, input));
+  });
+}
+
+export function assignmentMutation(request: NextRequest) {
+  return execute(request, async () => {
+    const session = mutationSession(request, true);
+    const input = await body(request, ['title', 'description', 'steps', 'type', 'groupId', 'subjectId', 'teacherId', 'dueAt']);
+    return json(saveAssignment(session.user!, input));
+  });
+}
+
+export function learningFile(request: NextRequest, id: string) {
+  return execute(request, () => {
+    const session = currentSession(request, true);
+    const file = readLearningFile(session.user!, id);
+    return new NextResponse(new Uint8Array(file.bytes), {
+      headers: {
+        'Content-Type': file.mimeType,
+        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        'Content-Length': String(file.bytes.byteLength),
+        'Cache-Control': 'private, no-store',
+        'Vary': 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': 'sandbox',
+      },
+    });
+  });
+}
+
+export function submissionMutation(request: NextRequest, assignmentId: string) {
+  return execute(request, async () => {
+    const session = mutationSession(request, true);
+    if (session.user!.role !== 'student') throw new AuthError(403, 'STUDENT_REQUIRED', 'Сдавать работу может только студент.');
+    const contentType = request.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().startsWith('multipart/form-data;')) throw new AuthError(415, 'FILE_REQUIRED', 'Выберите файл работы.');
+    const limit = 20 * 1024 * 1024 + 64 * 1024;
+    if (Number(request.headers.get('content-length')) > limit) throw new AuthError(413, 'FILE_TOO_LARGE', 'Файл больше 20 МБ.');
+    const reader = request.body?.getReader();
+    if (!reader) throw new AuthError(422, 'FILE_REQUIRED', 'Выберите файл работы.');
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      for (;;) {
+        const result = await reader.read();
+        if (result.done) break;
+        length += result.value.byteLength;
+        if (length > limit) {
+          await reader.cancel();
+          throw new AuthError(413, 'FILE_TOO_LARGE', 'Файл больше 20 МБ.');
+        }
+        chunks.push(result.value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    let form: FormData;
+    try {
+      form = await new Response(Buffer.concat(chunks), { headers: { 'Content-Type': contentType } }).formData();
+    } catch {
+      throw new AuthError(422, 'INVALID_UPLOAD', 'Не удалось прочитать файл. Выберите его ещё раз.');
+    }
+    const file = form.get('file');
+    if (Array.from(form.keys()).length !== 1 || !(file instanceof File) || !file.size) {
+      throw new AuthError(422, 'FILE_REQUIRED', 'Выберите один непустой файл работы.');
+    }
+    return json(saveSubmission(session.user!, assignmentId, {
+      name: file.name, mimeType: file.type, bytes: new Uint8Array(await file.arrayBuffer()),
+    }));
   });
 }

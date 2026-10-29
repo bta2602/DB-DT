@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "admin:create": "node scripts/create-admin.mjs"
+    "admin:create": "node scripts/create-admin.mjs",
+    "demo:seed": "node scripts/seed-demo.mjs"
   },
   "engines": {
     "node": ">=24.0.0"

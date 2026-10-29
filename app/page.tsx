@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { StudyHubApp } from '@/components/studyhub/studyhub-app';
 
 export default function HomePage() {
-  redirect('/studyhub/index.html');
+  return <StudyHubApp />;
 }

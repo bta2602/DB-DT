@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   AuthError, bootstrapFor, createGuestSession, matchesCsrf, readSession,
-  registerStudent, signIn, signOut, updateOwnProfile,
+  registerStudent, saveDirectory, saveLesson, signIn, signOut, updateOwnProfile,
 } from './auth-store.mjs';
 
 const COOKIE = 'studyhub_session';
@@ -162,5 +162,43 @@ export function updateProfile(request: NextRequest) {
     const input = await body(request, ['name', 'version']);
     updateOwnProfile(session.user!.id, input.name, input.version);
     return json({ ok: true });
+  });
+}
+
+type DirectoryKind = 'users' | 'groups' | 'subjects' | 'rooms' | 'teaching-assignments';
+const directoryFields: Record<DirectoryKind, string[]> = {
+  users: ['name', 'email', 'role', 'groupId'],
+  groups: ['name', 'course', 'curatorId'],
+  subjects: ['name'],
+  rooms: ['name', 'capacity'],
+  'teaching-assignments': ['teacherId', 'groupId', 'subjectId'],
+};
+
+function adminSession(request: NextRequest) {
+  const session = mutationSession(request, true);
+  if (session.user!.role !== 'admin') {
+    throw new AuthError(403, 'ADMIN_REQUIRED', 'Управлять справочниками и расписанием может только администратор.');
+  }
+  return session;
+}
+
+export function directoryMutation(request: NextRequest, kind: DirectoryKind, id = '') {
+  return execute(request, async () => {
+    const session = adminSession(request);
+    const fields = [...directoryFields[kind]];
+    if (id) fields.push('version');
+    else if (kind === 'users') fields.push('password');
+    const input = await body(request, fields);
+    return json(await saveDirectory(session.user!, kind, input, id));
+  });
+}
+
+export function lessonMutation(request: NextRequest, id = '') {
+  return execute(request, async () => {
+    const session = adminSession(request);
+    const fields = ['subjectId', 'groupId', 'teacherId', 'roomId', 'startsAt', 'endsAt', 'kind', 'note', 'status'];
+    if (id) fields.push('version');
+    const input = await body(request, fields);
+    return json(await saveLesson(session.user!, input, id));
   });
 }

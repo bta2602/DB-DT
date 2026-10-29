@@ -35,6 +35,7 @@ export type Group = {
 export type Subject = {
   id: Id;
   name: string;
+  version: number;
 };
 
 export type Room = {
@@ -214,6 +215,9 @@ export type AssignmentInput = Omit<
 
 export type UserInput = Omit<User, 'id' | 'version'>;
 
+/** Пароль задаётся администратором только при создании аккаунта. */
+export type CreateUserInput = UserInput & { password: string };
+
 export type GroupInput = Omit<Group, 'id' | 'version'>;
 
 export type RoomInput = Omit<Room, 'id' | 'version'>;
@@ -225,8 +229,8 @@ export type ProfileInput = {
 
 /**
  * Это описание маршрутов.
- * Авторизация и профиль уже реализованы в app/api.
- * Учебные маршруты остаются контрактом для дальнейшей интеграции.
+ * Авторизация, профиль, справочники и расписание реализованы в app/api.
+ * Оценки, посещаемость, задания и файлы остаются контрактом для дальнейшей интеграции.
  *
  * GET /api/session для гостя возвращает user: null.
  */
@@ -322,7 +326,7 @@ export const endpoints = {
   createUser: {
     method: 'POST',
     path: '/api/users',
-    request: 'UserInput',
+    request: 'CreateUserInput',
     response: 'MutationResult',
   },
 
@@ -371,7 +375,7 @@ export const endpoints = {
   updateSubject: {
     method: 'PATCH',
     path: '/api/subjects/:id',
-    request: '{name:string}',
+    request: '{name:string,version:number}',
     response: 'MutationResult',
   },
 

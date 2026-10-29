@@ -165,6 +165,14 @@ export type LoginInput = {
   password: string;
 };
 
+/** Самостоятельная регистрация создаёт только студента без назначенной группы. */
+export type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  passwordConfirmation: string;
+};
+
 export type GradeInput = {
   grade: Mark | null;
   version: number | null;
@@ -217,7 +225,8 @@ export type ProfileInput = {
 
 /**
  * Это описание маршрутов.
- * Реальные HTTP-обработчики реализуются на сервере.
+ * Авторизация и профиль уже реализованы в app/api.
+ * Учебные маршруты остаются контрактом для дальнейшей интеграции.
  *
  * GET /api/session для гостя возвращает user: null.
  */
@@ -232,6 +241,13 @@ export const endpoints = {
     method: 'POST',
     path: '/api/auth/login',
     request: 'LoginInput',
+    response: 'MutationResult',
+  },
+
+  register: {
+    method: 'POST',
+    path: '/api/auth/register',
+    request: 'RegisterInput',
     response: 'MutationResult',
   },
 

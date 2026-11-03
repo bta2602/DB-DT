@@ -421,7 +421,7 @@ export const endpoints = {
 
 export const schoolTimeZone = 'Asia/Qyzylorda';
 
-export const maxSubmissionBytes = 20 * 1024 * 1024;
+export const maxSubmissionBytes = 3 * 1024 * 1024;
 
 export const allowedSubmissionExtensions = [
   'pdf',

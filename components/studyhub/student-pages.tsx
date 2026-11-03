@@ -111,7 +111,7 @@ function AssignmentDialog({
       return;
     }
     if (file.size > maxSubmissionBytes) {
-      setError('Файл больше 20 МБ.');
+      setError('Файл больше 3 МБ.');
       return;
     }
     const extension = file.name.split('.').pop()?.toLowerCase();
@@ -202,7 +202,7 @@ function AssignmentDialog({
             />
           </Field>
           <p id="submission-file-hint" className="small muted">
-            PDF, DOCX, ZIP, SQL, TXT или изображение · до 20 МБ
+            PDF, DOCX, ZIP, SQL, TXT или изображение · до 3 МБ
           </p>
           <p id="submission-file-error" className="form-error error-text" role="alert">
             {error}

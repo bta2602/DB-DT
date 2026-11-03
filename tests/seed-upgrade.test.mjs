@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { basename, isAbsolute } from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
+import { closeDatabase } from '../database/connection.mjs';
 import { promisify } from 'node:util';
 import {
   bootstrapFor,
@@ -22,6 +23,10 @@ import { checkCampusData } from './campus-checks.mjs';
 const runFile = promisify(execFile);
 const directory = process.env.STUDYHUB_TEST_SEED_DIR;
 
+after(async () => {
+  await closeDatabase();
+});
+
 test(
   'The large campus dataset extends an existing database without losing work',
   {
@@ -40,12 +45,12 @@ test(
         original.data.users.map((user) => [user.id, 'isolated-upgrade-password-2026']),
       ),
     );
-    const admin = signInDemo('admin', createGuestSession().token).user;
-    const teacher = signInDemo('teacher', '').user;
-    const student = signInDemo('student', '').user;
-    updateOwnProfile(student.id, 'Айдана Серикова — учебный проект', student.version);
+    const admin = (await signInDemo('admin', (await createGuestSession()).token)).user;
+    const teacher = (await signInDemo('teacher', '')).user;
+    const student = (await signInDemo('student', '')).user;
+    await updateOwnProfile(student.id, 'Айдана Серикова — учебный проект', student.version);
 
-    const small = bootstrapFor(admin);
+    const small = await bootstrapFor(admin);
     const oldLesson = small.lessons.find(
       (lesson) =>
         lesson.teacherId === teacher.id &&
@@ -60,13 +65,16 @@ test(
     const oldGrade = small.grades.find(
       (grade) => grade.lessonId === oldLesson.id && grade.studentId === student.id,
     );
-    saveGrade(teacher, oldLesson.id, student.id, { grade: 4, version: oldGrade?.version ?? null });
+    await saveGrade(teacher, oldLesson.id, student.id, {
+      grade: 4,
+      version: oldGrade?.version ?? null,
+    });
 
     const manualStart = new Date(Date.now() + 70 * 86400000);
     manualStart.setUTCHours(3, 30, 0, 0);
     while ([0, 6].includes(manualStart.getUTCDay()))
       manualStart.setUTCDate(manualStart.getUTCDate() + 1);
-    saveLesson(admin, {
+    await saveLesson(admin, {
       groupId: oldLesson.groupId,
       subjectId: oldLesson.subjectId,
       teacherId: teacher.id,
@@ -77,7 +85,7 @@ test(
       status: 'scheduled',
       note: 'Занятие, добавленное до расширения базы',
     });
-    saveAssignment(teacher, {
+    await saveAssignment(teacher, {
       subjectId: oldLesson.subjectId,
       groupId: student.groupId,
       teacherId: teacher.id,
@@ -87,22 +95,24 @@ test(
       steps: ['Отправить файл'],
       dueAt: new Date(Date.now() + 86400000).toISOString(),
     });
-    const task = bootstrapFor(admin).assignments.find(
+    const task = (await bootstrapFor(admin)).assignments.find(
       (item) => item.title === 'Работа, созданная до расширения',
     );
     const content = "SELECT 'Сохранённая работа';\n";
-    saveSubmission(student, task.id, {
+    await saveSubmission(student, task.id, {
       name: 'saved.sql',
       bytes: new TextEncoder().encode(content),
     });
-    const submitted = bootstrapFor(admin).submissions.find((item) => item.assignmentId === task.id);
-    reviewSubmission(teacher, submitted.id, {
+    const submitted = (await bootstrapFor(admin)).submissions.find(
+      (item) => item.assignmentId === task.id,
+    );
+    await reviewSubmission(teacher, submitted.id, {
       action: 'grade',
       grade: 5,
       comment: 'Проверено до расширения базы.',
       version: submitted.version,
     });
-    const before = bootstrapFor(admin);
+    const before = await bootstrapFor(admin);
     const beforeWork = before.submissions.find((item) => item.id === submitted.id);
     const beforeGrade = before.grades.find(
       (item) => item.lessonId === oldLesson.id && item.studentId === student.id,
@@ -116,7 +126,7 @@ test(
       env: process.env,
       timeout: 240000,
     });
-    const expanded = bootstrapFor(admin);
+    const expanded = await bootstrapFor(admin);
     checkCampusData(expanded);
     assert.equal(
       expanded.users.find((item) => item.id === student.id).name,
@@ -141,7 +151,7 @@ test(
       manualLesson,
     );
     assert.equal(
-      new TextDecoder().decode(readLearningFile(student, beforeWork.file.id).bytes),
+      new TextDecoder().decode((await readLearningFile(student, beforeWork.file.id)).bytes),
       content,
     );
 
@@ -150,7 +160,7 @@ test(
       timeout: 240000,
     });
     assert.deepEqual(
-      bootstrapFor(admin),
+      await bootstrapFor(admin),
       expanded,
       'A repeated seed must not duplicate or reset records',
     );

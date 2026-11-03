@@ -231,7 +231,7 @@ function MaterialForm({ onClose }: { onClose: () => void }) {
       return;
     }
     if (file.size > maxSubmissionBytes) {
-      setError('Файл больше 20 МБ.');
+      setError('Файл больше 3 МБ.');
       return;
     }
     if (!allowedSubmissionExtensions.some((allowed) => allowed === extension)) {
@@ -289,7 +289,7 @@ function MaterialForm({ onClose }: { onClose: () => void }) {
           />
         </Field>
         <p className="small muted" id="material-file-hint">
-          PDF, DOCX, ZIP, SQL, TXT или изображение · до 20 МБ. Студенты найдут файл в разделе
+          PDF, DOCX, ZIP, SQL, TXT или изображение · до 3 МБ. Студенты найдут файл в разделе
           «Предметы».
         </p>
         {error && (

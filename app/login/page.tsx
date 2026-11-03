@@ -7,7 +7,7 @@ export const metadata = { title: 'StudyHUB · Вход' };
 
 export default async function Page() {
   const token = (await cookies()).get('studyhub_session')?.value;
-  const user = token ? readSession(token)?.user : null;
+  const user = token ? (await readSession(token))?.user : null;
   if (user) redirect(user.role === 'admin' ? '/overview' : '/today');
   return <StudyHubApp section="login" />;
 }

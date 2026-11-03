@@ -6,12 +6,18 @@ import { isDemoEnabled, seedDemoDataset } from '../lib/studyhub/auth-store.mjs';
 import { createDemoData } from '../database/seeds/demo-data.mjs';
 import { CAMPUS_SEED_ID, createCampusData } from '../database/seeds/campus-data.mjs';
 import { prepareCampusUpgrade, readSeedContext } from '../database/upgrade-campus.mjs';
+import { closeDatabase } from '../database/connection.mjs';
 
 try {
+  if (process.env.DATABASE_URL) {
+    throw new Error(
+      'Эта команда готовит локальную SQLite-базу. Для облачной базы используйте перенос подготовленных данных.',
+    );
+  }
   const args = process.argv.slice(2);
   if (args.some((arg) => arg !== '--more') || args.length > 1)
     throw new Error('Использование: npm run demo:seed [-- --more]');
-  const enabled = isDemoEnabled();
+  const enabled = await isDemoEnabled();
   const directory = resolve(process.env.STUDYHUB_DATA_DIR || '.studyhub');
   const publicRelative = relative(resolve('public'), directory);
   if (!(
@@ -152,4 +158,6 @@ try {
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'Не удалось подготовить учебные данные.');
   process.exitCode = 1;
+} finally {
+  await closeDatabase();
 }

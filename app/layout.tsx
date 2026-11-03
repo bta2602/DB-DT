@@ -23,12 +23,16 @@ export const dynamic = 'force-dynamic';
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const token = cookieStore.get('studyhub_session')?.value;
-  const stored = token ? readSession(token) : null;
+  const stored = token ? await readSession(token) : null;
   const initialSession = stored
-    ? ({ user: stored.user, csrfToken: stored.csrfToken, demoEnabled: isDemoEnabled() } as Session)
+    ? ({
+        user: stored.user,
+        csrfToken: stored.csrfToken,
+        demoEnabled: await isDemoEnabled(),
+      } as Session)
     : null;
   const initialData: Bootstrap = stored?.user
-    ? JSON.parse(JSON.stringify(bootstrapFor(stored.user)))
+    ? JSON.parse(JSON.stringify(await bootstrapFor(stored.user)))
     : emptyData();
   // eslint-disable-next-line react-hooks/purity -- A single request-time clock snapshot is serialized for identical SSR and hydration.
   const initialNow = Date.now();

@@ -21,6 +21,8 @@ await new Promise((resolve) => socket.close(resolve));
 const baseUrl = `http://127.0.0.1:${port}`;
 const environment = {
   ...process.env,
+  // Keep tests on their temporary SQLite database, even when .env.local configures Postgres.
+  DATABASE_URL: '',
   STUDYHUB_DATA_DIR: directory,
   STUDYHUB_DEMO_MODE: 'true',
   STUDYHUB_ORIGIN: baseUrl,

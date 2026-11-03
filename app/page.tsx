@@ -4,6 +4,6 @@ import { readSession } from '@/lib/studyhub/auth-store.mjs';
 
 export default async function HomePage() {
   const token = (await cookies()).get('studyhub_session')?.value;
-  const user = token ? readSession(token)?.user : null;
+  const user = token ? (await readSession(token))?.user : null;
   redirect(!user ? '/login' : user.role === 'admin' ? '/overview' : '/today');
 }

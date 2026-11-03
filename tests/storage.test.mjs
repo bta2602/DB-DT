@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { basename, dirname, isAbsolute, join } from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
+import { closeDatabase } from '../database/connection.mjs';
 import {
   createGuestSession,
   bootstrapFor,
@@ -15,6 +16,10 @@ import { createDemoData } from '../database/seeds/demo-data.mjs';
 
 const directory = process.env.STUDYHUB_TEST_STORAGE_DIR;
 
+after(async () => {
+  await closeDatabase();
+});
+
 test(
   'An ordinary account database cannot be opened through demo role switching',
   {
@@ -26,7 +31,7 @@ test(
     );
     process.env.STUDYHUB_DATA_DIR = directory;
     process.env.STUDYHUB_DEMO_MODE = 'false';
-    const guest = createGuestSession();
+    const guest = await createGuestSession();
     const session = await registerStudent(
       {
         name: 'Пользователь отдельной рабочей базы',
@@ -36,29 +41,29 @@ test(
       },
       guest.token,
     );
-    assert.equal(isDemoEnabled(), false);
-    assert.throws(
+    assert.equal(await isDemoEnabled(), false);
+    await assert.rejects(
       () => signInDemo('admin', session.token),
       (error) => error.code === 'DEMO_DISABLED',
     );
 
     process.env.STUDYHUB_DEMO_MODE = 'true';
-    assert.throws(
+    await assert.rejects(
       () => isDemoEnabled(),
       (error) => error.code === 'DEMO_REQUIRES_EMPTY_DATABASE',
     );
-    assert.throws(
+    await assert.rejects(
       () => signInDemo('admin', session.token),
       (error) => error.code === 'DEMO_REQUIRES_EMPTY_DATABASE',
     );
 
     process.env.STUDYHUB_DEMO_MODE = 'false';
-    assert.equal(readSession(session.token).user.id, session.user.id);
-    assert.equal(readSession(session.token).user.role, 'student');
+    assert.equal((await readSession(session.token)).user.id, session.user.id);
+    assert.equal((await readSession(session.token)).user.role, 'student');
 
     process.env.STUDYHUB_DEMO_MODE = 'true';
     delete process.env.STUDYHUB_DATA_DIR;
-    assert.throws(
+    await assert.rejects(
       () => isDemoEnabled(),
       (error) => error.code === 'DEMO_STORAGE_REQUIRED',
     );
@@ -81,10 +86,10 @@ test(
       snapshot.data.users.map((user) => [user.id, 'isolated-test-password-2026']),
     );
     await seedDemoDataset(snapshot, passwords);
-    const admin = signInDemo('admin', createGuestSession().token).user;
+    const admin = (await signInDemo('admin', (await createGuestSession()).token)).user;
 
     for (const role of ['admin', 'teacher', 'student']) {
-      const profile = signInDemo(role, '').user;
+      const profile = (await signInDemo(role, '')).user;
       const input = {
         name: profile.name,
         email: profile.email,
@@ -109,7 +114,7 @@ test(
         },
         profile.id,
       );
-      const switched = signInDemo(role, '').user;
+      const switched = (await signInDemo(role, '')).user;
       assert.equal(switched.role, role);
       assert.equal(switched.name, `Изменённый профиль: ${role}`);
       assert.equal(switched.email, `edited-${role}@example.test`);
@@ -122,7 +127,7 @@ test(
       groupId: null,
       password: 'isolated-test-password-2026',
     });
-    const ordinary = bootstrapFor(admin).users.find(
+    const ordinary = (await bootstrapFor(admin)).users.find(
       (user) => user.email === 'changeable-role@example.test',
     );
     assert.ok(ordinary);
@@ -138,6 +143,9 @@ test(
       },
       ordinary.id,
     );
-    assert.equal(bootstrapFor(admin).users.find((user) => user.id === ordinary.id).role, 'teacher');
+    assert.equal(
+      (await bootstrapFor(admin)).users.find((user) => user.id === ordinary.id).role,
+      'teacher',
+    );
   },
 );

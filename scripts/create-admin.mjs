@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { normalizeEmail, normalizeName, provisionAdmin } from '../lib/studyhub/auth-store.mjs';
+import { closeDatabase } from '../database/connection.mjs';
 
 const [email, ...nameParts] = process.argv.slice(2);
 if (!email || !nameParts.length) {
@@ -52,5 +53,7 @@ if (!email || !nameParts.length) {
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'Не удалось создать администратора.');
     process.exitCode = 1;
+  } finally {
+    await closeDatabase();
   }
 }

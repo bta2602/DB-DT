@@ -1166,3 +1166,27 @@
     color: var(--muted);
   }
 }
+.directory-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.directory-filters .field {
+  flex: 1 1 180px;
+}
+.directory-filters .field:first-child {
+  flex: 2 1 260px;
+}
+.directory-pagination,
+.directory-pagination > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.directory-pagination {
+  justify-content: space-between;
+  margin-top: 20px;
+  font-size: 13px;
+}

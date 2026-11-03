@@ -92,7 +92,9 @@ try {
   await run(['--test', '--test-reporter=spec', 'tests/storage.test.mjs'], {
     STUDYHUB_TEST_STORAGE_DIR: join(directory, 'ordinary-database'),
   });
-  await run(['scripts/seed-demo.mjs']);
+  await run(['--test', '--test-reporter=spec', 'tests/seed-upgrade.test.mjs'], {
+    STUDYHUB_TEST_SEED_DIR: directory,
+  });
   await startServer();
   await run(['--test', '--test-reporter=spec', 'tests/api.test.mjs']);
 

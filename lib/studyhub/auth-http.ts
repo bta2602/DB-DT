@@ -212,8 +212,7 @@ export function getSession(request: NextRequest) {
 
 export function demoLogin(request: NextRequest) {
   return execute(request, async () => {
-    if (!isDemoEnabled())
-      throw new AuthError(404, 'DEMO_DISABLED', 'Демонстрационный вход отключён.');
+    if (!isDemoEnabled()) throw new AuthError(404, 'DEMO_DISABLED', 'Учебный доступ отключён.');
     const previous = mutationSession(request);
     const input = await body(request, ['role']);
     const session = signInDemo(input.role, previous.token);

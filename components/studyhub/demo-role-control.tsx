@@ -9,11 +9,13 @@ import { useStudyHub } from './context';
 const demoRoles: Role[] = ['student', 'teacher', 'admin'];
 
 export function DemoRoleControl({
-  compact = false,
+  inAccount = false,
   disabled = false,
+  onSelected,
 }: {
-  compact?: boolean;
+  inAccount?: boolean;
   disabled?: boolean;
+  onSelected?: () => void;
 }) {
   const { user, demoEnabled, ready, switchRole, switchingRole } = useStudyHub();
   const router = useRouter();
@@ -26,6 +28,7 @@ export function DemoRoleControl({
     setError('');
     try {
       const session = await switchRole(role);
+      onSelected?.();
       router.replace(session.user?.role === 'admin' ? '/overview' : '/today');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось переключить роль.');
@@ -34,24 +37,24 @@ export function DemoRoleControl({
 
   return (
     <section
-      className={`demo-role-control ${compact ? 'compact' : ''}`}
+      className={`role-control ${inAccount ? 'in-account' : ''}`}
       aria-labelledby={labelId}
       aria-busy={switchingRole}
     >
-      <strong className="demo-role-label" id={labelId}>
-        {compact ? 'Демо-роль' : 'Попробуйте StudyHUB'}
+      <strong className="role-control-label" id={labelId}>
+        {inAccount ? 'Выбрать роль' : 'Учебный доступ'}
       </strong>
-      {!compact && (
-        <p className="demo-role-description">
+      {!inAccount && (
+        <p className="role-control-description">
           Выберите роль и откройте учебное пространство без регистрации.
         </p>
       )}
-      <div className="demo-role-options" role="group" aria-label="Выбор демонстрационной роли">
+      <div className="role-control-options" role="group" aria-label="Выбор роли">
         {demoRoles.map((role) => (
           <button
             type="button"
             key={role}
-            className={`demo-role-button ${user?.role === role ? 'active' : ''}`}
+            className={`role-control-button ${user?.role === role ? 'active' : ''}`}
             aria-pressed={user?.role === role}
             disabled={disabled || !ready || switchingRole}
             onClick={() => void chooseRole(role)}
@@ -65,13 +68,8 @@ export function DemoRoleControl({
           Открываем кабинет…
         </span>
       )}
-      {!compact && (
-        <p className="small muted">
-          Это демонстрационные аккаунты. Изменения в данных сохраняются.
-        </p>
-      )}
       {error && (
-        <p className="demo-role-error error-text" role="alert">
+        <p className="role-control-error error-text" role="alert">
           {error}
         </p>
       )}

@@ -1,3 +1,5 @@
+import { cleanSeedSnapshot } from './clean-records.mjs';
+
 /** Additional fictional records. This factory never writes to storage or changes its input. */
 export function createMoreDemoData(now = new Date(), existing) {
   const instant = new Date(now),
@@ -450,7 +452,7 @@ export function createMoreDemoData(now = new Date(), existing) {
       publishedAt: iso(at(-1, 12)),
     },
   ];
-  return {
+  return cleanSeedSnapshot({
     seedId: 'studyhub-fictional-demo-v2',
     seedDate,
     profiles,
@@ -469,5 +471,5 @@ export function createMoreDemoData(now = new Date(), existing) {
       materials,
       announcements,
     },
-  };
+  });
 }

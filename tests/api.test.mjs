@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { TestClient, upload } from './http-client.mjs';
+import { checkCampusData } from './campus-checks.mjs';
 
 const baseUrl = process.env.TEST_BASE_URL || 'http://127.0.0.1:3101';
 assert.ok(
@@ -85,6 +86,7 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
       assert.ok(Array.isArray(data[key]), `Missing collection: ${key}`);
       assert.ok(data[key].length, `Demo collection is empty: ${key}`);
     }
+    checkCampusData(data);
     const privateKeys = /password|token|secret|contents/i;
     for (const user of data.users)
       assert.ok(!Object.keys(user).some((key) => privateKeys.test(key)));

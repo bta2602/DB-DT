@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Fragment, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatDate, dateKey, initials, roles } from '@/lib/studyhub/client-utils';
 import type { Role } from '@/lib/studyhub/api-contract';
 import { useStudyHub } from './context';
 import { AuthPage } from './auth-page';
 import { DemoRoleControl } from './demo-role-control';
-import { Brand, EmptyState, Icon } from './shared';
+import { Brand, EmptyState, Icon, Modal } from './shared';
 
 const titles: Record<string, string> = {
   today: 'Сегодня',
@@ -58,16 +58,32 @@ export function StudyHubApp({
     useStudyHub();
   const router = useRouter();
   const [menu, setMenu] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const accountButton = useRef<HTMLButtonElement>(null);
+  const mobileMenuButton = useRef<HTMLButtonElement>(null);
+  const accountReturnFocus = useRef<HTMLElement | null>(null);
   const page = section || (user?.role === 'admin' ? 'overview' : 'today');
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenu(false);
+      if (event.key === 'Escape' && menu && !accountOpen) {
+        setMenu(false);
+        mobileMenuButton.current?.focus();
+      }
     };
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
-  }, []);
+  }, [menu, accountOpen]);
+
+  function openAccount() {
+    accountReturnFocus.current = window.matchMedia('(max-width: 720px)').matches
+      ? mobileMenuButton.current
+      : accountButton.current;
+    setMenu(false);
+    setAccountOpen(true);
+  }
 
   useEffect(() => {
     const legacy = window.location.hash.slice(1);
@@ -76,14 +92,17 @@ export function StudyHubApp({
 
   async function logout() {
     setBusy(true);
+    setLoggingOut(true);
     try {
       await request('/api/auth/logout', { method: 'POST', body: {} });
       await reloadSession();
+      setAccountOpen(false);
       router.replace('/login');
     } catch (cause) {
       notify(cause instanceof Error ? cause.message : 'Не удалось выйти.');
     } finally {
       setBusy(false);
+      setLoggingOut(false);
     }
   }
 
@@ -195,11 +214,14 @@ export function StudyHubApp({
             теперь в одном месте.
           </p>
         </div>
-        <Link
+        <button
+          ref={accountButton}
+          type="button"
           className="profile-btn"
-          href="/profile"
-          aria-current={page === 'profile' ? 'page' : undefined}
-          onClick={() => setMenu(false)}
+          aria-haspopup="dialog"
+          aria-expanded={accountOpen}
+          aria-label={`Открыть меню аккаунта: ${user.name}`}
+          onClick={openAccount}
         >
           <span className="avatar teacher">{initials(user.name)}</span>
           <span className="grow">
@@ -207,12 +229,13 @@ export function StudyHubApp({
             <small>{roles[user.role]}</small>
           </span>
           <Icon name="chevron" className="sm" />
-        </Link>
+        </button>
       </aside>
       <div className="main-shell">
         <header className="topbar">
           <div className="flex">
             <button
+              ref={mobileMenuButton}
               type="button"
               className="icon-btn mobile-menu"
               aria-label="Открыть меню"
@@ -229,7 +252,6 @@ export function StudyHubApp({
             </div>
           </div>
           <div className="top-actions">
-            <DemoRoleControl compact disabled={busy} />
             <span className="user-role">{roles[user.role]}</span>
             <button
               type="button"
@@ -239,15 +261,6 @@ export function StudyHubApp({
               onClick={() => void refreshData()}
             >
               <Icon name="clock" />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Выйти"
-              disabled={busy || switchingRole}
-              onClick={() => void logout()}
-            >
-              <Icon name="logout" />
             </button>
           </div>
         </header>
@@ -259,12 +272,6 @@ export function StudyHubApp({
           {error && (
             <div className="publication-error" role="alert">
               {error}
-            </div>
-          )}
-          {data.announcements.some((item) => item.id === 'demo-notice-fiction') && (
-            <div className="publication-hint" role="note">
-              <strong>В базе есть демонстрационные данные.</strong> Записи с пометкой «демо» и
-              связанные с ними пользователи и работы вымышлены. Изменения сохраняются.
             </div>
           )}
           <Suspense fallback={<p role="status">Загрузка раздела…</p>}>
@@ -285,6 +292,48 @@ export function StudyHubApp({
           </footer>
         </main>
       </div>
+      {accountOpen && (
+        <Modal
+          title="Аккаунт"
+          className="account-dialog"
+          closeDisabled={loggingOut || switchingRole}
+          returnFocusRef={accountReturnFocus}
+          onClose={() => setAccountOpen(false)}
+        >
+          <div className="account-summary">
+            <span className="avatar teacher account-avatar">{initials(user.name)}</span>
+            <div>
+              <h3>{user.name}</h3>
+              <p className="account-role">{roles[user.role]}</p>
+              <p className="account-email">{user.email}</p>
+            </div>
+          </div>
+          <Link
+            className="button full account-profile-link"
+            href="/profile"
+            aria-disabled={busy || switchingRole}
+            onClick={(event) => {
+              if (busy || switchingRole) event.preventDefault();
+              else setAccountOpen(false);
+            }}
+          >
+            <Icon name="users" className="sm" />
+            Открыть профиль
+          </Link>
+          <DemoRoleControl inAccount disabled={busy} onSelected={() => setAccountOpen(false)} />
+          <div className="account-actions">
+            <button
+              type="button"
+              className="button danger full"
+              disabled={busy || switchingRole}
+              onClick={() => void logout()}
+            >
+              <Icon name="logout" className="sm" />
+              {loggingOut ? 'Выходим…' : 'Выйти из аккаунта'}
+            </button>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

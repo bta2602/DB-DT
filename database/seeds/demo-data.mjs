@@ -1,3 +1,5 @@
+import { cleanSeedSnapshot } from './clean-records.mjs';
+
 /**
  * Fictional demonstration data, never real college records.
  * This factory has no storage, network, account or database side effects.
@@ -537,7 +539,7 @@ export function createDemoData(now = new Date()) {
       publishedAt: at(-2, 12),
     },
   ];
-  return {
+  return cleanSeedSnapshot({
     seedDate,
     profiles,
     files,
@@ -555,5 +557,5 @@ export function createDemoData(now = new Date()) {
       materials,
       announcements,
     },
-  };
+  });
 }

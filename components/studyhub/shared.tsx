@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import type { User } from '@/lib/studyhub/api-contract';
 import { initials, roles } from '@/lib/studyhub/client-utils';
 import { ICONS } from '@/lib/studyhub/icons';
@@ -95,31 +95,37 @@ export function Modal({
   title,
   onClose,
   children,
+  className = '',
+  closeDisabled = false,
+  returnFocusRef,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
+  closeDisabled?: boolean;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const backdropPressed = useRef(false);
   const headingId = useId();
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    const previous = returnFocusRef?.current || (document.activeElement as HTMLElement | null);
     const element = dialog.current;
     element?.showModal();
     return () => {
       element?.close();
-      previous?.focus();
+      if (previous?.isConnected) previous.focus();
     };
-  }, []);
+  }, [returnFocusRef]);
   return (
     <dialog
       ref={dialog}
-      className="studyhub-dialog"
+      className={`studyhub-dialog ${className}`}
       aria-labelledby={headingId}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        if (!closeDisabled) onClose();
       }}
       onPointerDown={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -133,7 +139,7 @@ export function Modal({
       onClick={(event) => {
         const startedOutside = backdropPressed.current;
         backdropPressed.current = false;
-        if (!startedOutside || event.target !== event.currentTarget) return;
+        if (closeDisabled || !startedOutside || event.target !== event.currentTarget) return;
         const rect = event.currentTarget.getBoundingClientRect();
         if (
           event.clientX < rect.left ||
@@ -146,7 +152,13 @@ export function Modal({
     >
       <header className="publication-dialog-head">
         <h2 id={headingId}>{title}</h2>
-        <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Закрыть"
+          onClick={onClose}
+          disabled={closeDisabled}
+        >
           <Icon name="close" />
         </button>
       </header>

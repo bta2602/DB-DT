@@ -865,6 +865,35 @@ export function PeoplePage() {
   const { data } = useStudyHub();
   const [tab, setTab] = useState<Exclude<DirectoryKind, 'rooms'>>('users');
   const [editing, setEditing] = useState<Editor | null>(null);
+  const [query, setQuery] = useState('');
+  const [role, setRole] = useState('');
+  const [group, setGroup] = useState('');
+  const [page, setPage] = useState(0);
+  const search = query.trim().toLocaleLowerCase('ru');
+  const matches = (...values: string[]) =>
+    values.join(' ').toLocaleLowerCase('ru').includes(search);
+  const filtered = {
+    users: data.users.filter(
+      (user) =>
+        (!role || user.role === role) &&
+        (!group || user.groupId === group) &&
+        matches(user.name, user.email || '', referenceName(data.groups, user.groupId)),
+    ),
+    groups: data.groups.filter((item) => matches(item.name)),
+    subjects: data.subjects.filter((item) => matches(item.name)),
+    teachingAssignments: data.teachingAssignments.filter((item) =>
+      matches(
+        referenceName(data.users, item.teacherId),
+        referenceName(data.groups, item.groupId),
+        referenceName(data.subjects, item.subjectId),
+      ),
+    ),
+  };
+  const pageSize = 25;
+  const count = filtered[tab].length;
+  const lastPage = Math.max(0, Math.ceil(count / pageSize) - 1);
+  const currentPage = Math.min(page, lastPage);
+  const start = currentPage * pageSize;
   const tabs = {
     users: 'Пользователи',
     groups: 'Группы',
@@ -903,6 +932,13 @@ export function PeoplePage() {
           </button>
         }
       />
+      <Statistics
+        items={[
+          [data.users.filter((user) => user.role === 'student').length, 'Студентов', 'users'],
+          [data.users.filter((user) => user.role === 'teacher').length, 'Преподавателей', 'book'],
+          [data.groups.length, 'Учебных групп', 'building'],
+        ]}
+      />
       <div className="tabs mb" aria-label="Справочники">
         {Object.entries(tabs).map(([value, title]) => (
           <button
@@ -910,21 +946,75 @@ export function PeoplePage() {
             key={value}
             className={tab === value ? 'active' : ''}
             aria-pressed={tab === value}
-            onClick={() => setTab(value as typeof tab)}
+            onClick={() => {
+              setTab(value as typeof tab);
+              setQuery('');
+              setPage(0);
+            }}
           >
             {title}
           </button>
         ))}
       </div>
-      {!data[tab].length ? (
+      <div className="directory-filters">
+        <Field label="Поиск по справочнику">
+          <input
+            type="search"
+            value={query}
+            placeholder={tab === 'users' ? 'Имя, почта или группа' : 'Название или имя'}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+          />
+        </Field>
+        {tab === 'users' && (
+          <>
+            <Field label="Роль пользователя">
+              <select
+                value={role}
+                onChange={(event) => {
+                  setRole(event.target.value);
+                  setGroup('');
+                  setPage(0);
+                }}
+              >
+                <option value="">Все роли</option>
+                {Object.entries(roles).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Учебная группа">
+              <select
+                value={group}
+                onChange={(event) => {
+                  setGroup(event.target.value);
+                  setRole(event.target.value ? 'student' : role);
+                  setPage(0);
+                }}
+              >
+                <SelectOptions items={data.groups} blank="Все группы" />
+              </select>
+            </Field>
+          </>
+        )}
+      </div>
+      {!count ? (
         <EmptyState
-          title="Пока пусто"
-          description="Добавьте первую запись с помощью кнопки выше."
+          title={data[tab].length ? 'Ничего не найдено' : 'Пока пусто'}
+          description={
+            data[tab].length
+              ? 'Измените поисковый запрос или фильтры.'
+              : 'Добавьте первую запись с помощью кнопки выше.'
+          }
         />
       ) : (
         <Table headers={headers[tab]}>
           {tab === 'users' &&
-            data.users.map((user) => (
+            filtered.users.slice(start, start + pageSize).map((user) => (
               <tr key={user.id}>
                 <td>
                   <Person user={user} />
@@ -935,7 +1025,7 @@ export function PeoplePage() {
               </tr>
             ))}
           {tab === 'groups' &&
-            data.groups.map((group) => (
+            filtered.groups.slice(start, start + pageSize).map((group) => (
               <tr key={group.id}>
                 <td>{group.name}</td>
                 <td>{group.course}</td>
@@ -944,14 +1034,14 @@ export function PeoplePage() {
               </tr>
             ))}
           {tab === 'subjects' &&
-            data.subjects.map((subject) => (
+            filtered.subjects.slice(start, start + pageSize).map((subject) => (
               <tr key={subject.id}>
                 <td>{subject.name}</td>
                 <td>{editButton('subjects', subject)}</td>
               </tr>
             ))}
           {tab === 'teachingAssignments' &&
-            data.teachingAssignments.map((assignment) => (
+            filtered.teachingAssignments.slice(start, start + pageSize).map((assignment) => (
               <tr key={`${assignment.teacherId}:${assignment.groupId}:${assignment.subjectId}`}>
                 <td>{referenceName(data.users, assignment.teacherId)}</td>
                 <td>{referenceName(data.groups, assignment.groupId)}</td>
@@ -959,6 +1049,34 @@ export function PeoplePage() {
               </tr>
             ))}
         </Table>
+      )}
+      {count > 0 && (
+        <nav className="directory-pagination" aria-label="Страницы справочника">
+          <span className="muted" role="status">
+            Записи {start + 1}–{Math.min(start + pageSize, count)} из {count}
+          </span>
+          <div>
+            <button
+              type="button"
+              className="button small"
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              Назад
+            </button>
+            <span>
+              Страница {currentPage + 1} из {lastPage + 1}
+            </span>
+            <button
+              type="button"
+              className="button small"
+              disabled={currentPage === lastPage}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              Далее
+            </button>
+          </div>
+        </nav>
       )}
       {editing && <DirectoryEditor {...editing} onClose={() => setEditing(null)} />}
     </>

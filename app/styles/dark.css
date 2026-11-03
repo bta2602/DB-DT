@@ -1,0 +1,303 @@
+/* Dark palette and overrides for the original light interface. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #101916;
+  --white: #1b2822;
+  --ink: #e6eee8;
+  --muted: #adbbb2;
+  --green: #94d4b7;
+  --dark: #b1e2cc;
+  --soft: #263c31;
+  --line: #3b5144;
+  --control-border: #78917e;
+  --focus: #a5e5c9;
+  --amber: #ebc57d;
+  --amber-bg: #413621;
+  --blue: #a8cfeb;
+  --blue-bg: #253a47;
+  --red: #f1aca0;
+  --red-bg: #482f2c;
+  --shadow: 0 18px 60px #0008;
+}
+[data-theme='dark'] button:focus-visible,
+[data-theme='dark'] a:focus-visible,
+[data-theme='dark'] input:focus-visible,
+[data-theme='dark'] select:focus-visible,
+[data-theme='dark'] textarea:focus-visible,
+[data-theme='dark'] .dropzone:focus-within {
+  outline: 3px solid var(--focus);
+}
+[data-theme='dark'] .skip,
+[data-theme='dark'] .sidebar,
+[data-theme='dark'] .workspace-logo,
+[data-theme='dark'] .nav-item.active,
+[data-theme='dark'] .nav-count,
+[data-theme='dark'] .avatar.teacher,
+[data-theme='dark'] .button,
+[data-theme='dark'] .button.white,
+[data-theme='dark'] .card,
+[data-theme='dark'] .book,
+[data-theme='dark'] .art-check,
+[data-theme='dark'] .lesson-row,
+[data-theme='dark'] .lesson-row.past,
+[data-theme='dark'] .task-list,
+[data-theme='dark'] .task-row,
+[data-theme='dark'] .task-row:hover,
+[data-theme='dark'] .calendar-day.today:after,
+[data-theme='dark'] .tabs,
+[data-theme='dark'] .tabs button.active,
+[data-theme='dark'] .search-field,
+[data-theme='dark'] .data-table th,
+[data-theme='dark'] .timetable-cell.current,
+[data-theme='dark'] .field input,
+[data-theme='dark'] .field select,
+[data-theme='dark'] .field textarea,
+[data-theme='dark'] .field input[readonly],
+[data-theme='dark'] .toggle-row input:before,
+[data-theme='dark'] .drawer,
+[data-theme='dark'] .drawer-footer,
+[data-theme='dark'] .feedback,
+[data-theme='dark'] .modal,
+[data-theme='dark'] .guest,
+[data-theme='dark'] .snapshot-date,
+[data-theme='dark'] .snapshot-time,
+[data-theme='dark'] .admin-kpi,
+[data-theme='dark'] .live-filter-line button.active,
+[data-theme='dark'] .live-card,
+[data-theme='dark'] .live-card.active .live-card-top,
+[data-theme='dark'] .lesson-progress,
+[data-theme='dark'] .entity-table th,
+[data-theme='dark'] .agenda-table th,
+[data-theme='dark'] .agenda-table .agenda-current td,
+[data-theme='dark'] .planner-day-col.selected,
+[data-theme='dark'] .planner-day-col.selected .planner-day-title,
+[data-theme='dark'] .planner-form .form-actions,
+[data-theme='dark'] .room-card,
+[data-theme='dark'] .teacher-stat,
+[data-theme='dark'] .teacher-grade-table th.current,
+[data-theme='dark'] .teacher-grade-table td,
+[data-theme='dark'] .teacher-grade-table td:first-child,
+[data-theme='dark'] .teacher-grade-table tr:hover td,
+[data-theme='dark'] .work-conditions,
+[data-theme='dark'] .teacher-grade-table td:focus-within,
+[data-theme='dark'] .auth-mode-switch button.active,
+[data-theme='dark'] .publication-login,
+[data-theme='dark'] .login-form-inner input,
+[data-theme='dark'] dialog#dialog,
+[data-theme='dark'] .publication-lesson,
+[data-theme='dark'] .auth-mode-switch a.active,
+[data-theme='dark'] .role-control-button,
+[data-theme='dark'] .sidebar .profile-btn {
+  background: var(--white);
+}
+[data-theme='dark'] .nav-item,
+[data-theme='dark'] .icon-btn,
+[data-theme='dark'] .spark,
+[data-theme='dark'] .lesson-room,
+[data-theme='dark'] .week-progress p,
+[data-theme='dark'] .tabs button,
+[data-theme='dark'] .empty .icon,
+[data-theme='dark'] .timetable-lesson small,
+[data-theme='dark'] .drawer-section p,
+[data-theme='dark'] .drawer-section li,
+[data-theme='dark'] .success-box p,
+[data-theme='dark'] .snapshot-label,
+[data-theme='dark'] .admin-kpi-head .icon,
+[data-theme='dark'] .admin-kpi-foot,
+[data-theme='dark'] .live-filter-line button,
+[data-theme='dark'] .live-person,
+[data-theme='dark'] .live-time-row span,
+[data-theme='dark'] .live-card-bottom strong,
+[data-theme='dark'] .week-event small,
+[data-theme='dark'] .planner-audit summary,
+[data-theme='dark'] .detail-note,
+[data-theme='dark'] .planner-no-lessons .icon,
+[data-theme='dark'] .teacher-lesson p,
+[data-theme='dark'] .teacher-lesson .lesson-tags,
+[data-theme='dark'] .teacher-grade-table th strong,
+[data-theme='dark'] .teacher-grade-table th small,
+[data-theme='dark'] .journal-help,
+[data-theme='dark'] .preview-empty .icon,
+[data-theme='dark'] .work-conditions .conditions-content,
+[data-theme='dark'] .review-rubric label,
+[data-theme='dark'] .teacher-empty-cell,
+[data-theme='dark'] .teacher-save-note,
+[data-theme='dark'] .login-story .eyebrow,
+[data-theme='dark'] .login-story > small {
+  color: var(--green);
+}
+[data-theme='dark'] .sidebar-note {
+  background: linear-gradient(130deg, var(--white), var(--white));
+}
+[data-theme='dark'] .avatar {
+  background: var(--white);
+  color: var(--muted);
+}
+[data-theme='dark'] .breadcrumb span,
+[data-theme='dark'] .stat-value span,
+[data-theme='dark'] .calendar-grid > span,
+[data-theme='dark'] .calendar-day.dim,
+[data-theme='dark'] .notice time,
+[data-theme='dark'] .page-footer,
+[data-theme='dark'] .feedback p,
+[data-theme='dark'] .admin-kpi-value small,
+[data-theme='dark'] .week-empty {
+  color: var(--muted);
+}
+[data-theme='dark'] .date-badge,
+[data-theme='dark'] .progress-ring span,
+[data-theme='dark'] .select,
+[data-theme='dark'] .snapshot-presets button,
+[data-theme='dark'] .entity-table .cell-person .avatar,
+[data-theme='dark'] .teacher-grade-table th,
+[data-theme='dark'] .student-cell .avatar,
+[data-theme='dark'] .review-table th,
+[data-theme='dark'] .work-code,
+[data-theme='dark'] .review-quick-comments button,
+[data-theme='dark'] .teacher-checklist-tip {
+  background: var(--white);
+  color: var(--green);
+}
+[data-theme='dark'] .pill.neutral {
+  color: var(--muted);
+  background: var(--white);
+}
+[data-theme='dark'] .lesson-row:hover,
+[data-theme='dark'] .timetable-lesson.blue,
+[data-theme='dark'] .timetable-lesson.amber,
+[data-theme='dark'] .live-card.active,
+[data-theme='dark'] .live-card.conflict,
+[data-theme='dark'] .room-button:hover,
+[data-theme='dark'] .planner-filterbar .button.active,
+[data-theme='dark'] .admin-detail-list button.active,
+[data-theme='dark'] .field input,
+[data-theme='dark'] .field textarea,
+[data-theme='dark'] .field select {
+  border-color: var(--line);
+}
+[data-theme='dark'] .lesson-row.next,
+[data-theme='dark'] .timetable-lesson.clay,
+[data-theme='dark'] .room-button.occupied {
+  background: var(--white);
+  border-color: var(--line);
+}
+[data-theme='dark'] .lesson-row.past .lesson-line,
+[data-theme='dark'] .lesson-row:last-child .lesson-line,
+[data-theme='dark'] .toggle-row input,
+[data-theme='dark'] .room-button > span,
+[data-theme='dark'] .room-legend i {
+  background: var(--soft);
+}
+[data-theme='dark'] .subject-icon.clay {
+  background: var(--white);
+  color: var(--red);
+}
+[data-theme='dark'] .week-progress,
+[data-theme='dark'] .teacher-lesson {
+  background: var(--white);
+  border: 1px solid var(--line);
+}
+[data-theme='dark'] .progress-ring {
+  background: conic-gradient(#7d966e 0 75%, var(--white) 75%);
+}
+[data-theme='dark'] .timetable-lesson {
+  border-left: 3px solid var(--line);
+}
+[data-theme='dark'] .dropzone {
+  border: 1px dashed var(--line);
+  background: var(--white);
+}
+[data-theme='dark'] .success-box,
+[data-theme='dark'] .conflict-banner,
+[data-theme='dark'] .publication-error {
+  border: 1px solid var(--line);
+}
+[data-theme='dark'] .snapshot-presets button.active,
+[data-theme='dark'] .admin-kpi.attention,
+[data-theme='dark'] .admin-room-free {
+  border-color: var(--line);
+  background: var(--white);
+}
+[data-theme='dark'] .live-card-top {
+  border-bottom: 1px solid var(--line);
+  background: var(--white);
+}
+[data-theme='dark'] .week-event {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+}
+[data-theme='dark'] .week-event:nth-child(odd) {
+  background: var(--white);
+  border-color: var(--line);
+  border-left-color: var(--line);
+}
+[data-theme='dark'] .conflict-list {
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--red);
+}
+[data-theme='dark'] .availability-ok {
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+[data-theme='dark'] .work-prose,
+[data-theme='dark'] .preview-caption {
+  color: var(--green);
+  background: var(--white);
+}
+[data-theme='dark'] .review-published {
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--green);
+}
+[data-theme='dark'] .review-published.revision {
+  background: var(--white);
+  border-color: var(--line);
+  color: var(--red);
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] textarea,
+[data-theme='dark'] select,
+[data-theme='dark'] .studyhub-dialog {
+  background: var(--white);
+  color: var(--ink);
+}
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+[data-theme='dark'] .button.primary,
+[data-theme='dark'] .brand-mark,
+[data-theme='dark'] .welcome-banner,
+[data-theme='dark'] .calendar-day.today,
+[data-theme='dark'] .login-art,
+[data-theme='dark'] .role-control-button[aria-pressed='true'] {
+  background: #326b55;
+  color: #fff;
+  border-color: #568b72;
+}
+[data-theme='dark'] .button.primary:hover {
+  background: #3b7c62;
+}
+[data-theme='dark'] .login-story {
+  background: #153c2c;
+  color: #fff;
+}
+[data-theme='dark'] .login-story .eyebrow,
+[data-theme='dark'] .login-story p {
+  color: #c6dccc;
+}
+[data-theme='dark'] .studyhub-dialog::backdrop {
+  background: #040b09b8;
+}
+[data-theme='dark'] .topbar {
+  background: #15221deb;
+}
+[data-theme='dark'] .nav-item.active,
+[data-theme='dark'] .tabs button.active {
+  background: var(--soft);
+  color: var(--green);
+}

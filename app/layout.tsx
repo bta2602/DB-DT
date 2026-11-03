@@ -1,7 +1,17 @@
-import type { Metadata, Viewport } from 'next';
+import type { Viewport } from 'next';
+import { pageMetadata } from '@/lib/studyhub/page-metadata';
 import { cookies } from 'next/headers';
 import { StudyHubProvider } from '@/components/studyhub/context';
 import { TeacherWorkspaceProvider } from '@/components/studyhub/teacher-context';
+import { PreferencesProvider } from '@/components/studyhub/preferences';
+import { SkipLink } from '@/components/studyhub/preference-controls';
+import {
+  LOCALE_COOKIE,
+  THEME_COOKIE,
+  normalizeLocale,
+  normalizeTheme,
+  translate,
+} from '@/lib/studyhub/i18n';
 import { bootstrapFor, isDemoEnabled, readSession } from '@/lib/studyhub/auth-store.mjs';
 import { emptyData } from '@/lib/studyhub/client-utils';
 import type { Bootstrap, Session } from '@/lib/studyhub/api-contract';
@@ -11,17 +21,20 @@ import './styles/teacher.css';
 import './styles/admin.css';
 import './styles/publication.css';
 import './globals.css';
+import './styles/preferences.css';
+import './styles/dark.css';
 
-export const metadata: Metadata = {
-  title: 'StudyHUB · Учебное пространство',
-  description: 'Расписание, задания, оценки и посещаемость в одном учебном пространстве.',
-};
+export async function generateMetadata() {
+  return pageMetadata('Учебное пространство');
+}
 export const viewport: Viewport = { themeColor: '#2f6355' };
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
+  const locale = normalizeLocale(cookieStore.get(LOCALE_COOKIE)?.value);
+  const theme = normalizeTheme(cookieStore.get(THEME_COOKIE)?.value);
   const token = cookieStore.get('studyhub_session')?.value;
   const stored = token ? await readSession(token) : null;
   const initialSession = stored
@@ -37,19 +50,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // eslint-disable-next-line react-hooks/purity -- A single request-time clock snapshot is serialized for identical SSR and hydration.
   const initialNow = Date.now();
   return (
-    <html lang="ru">
+    <html lang={locale} data-theme={theme}>
       <body>
-        <a className="skip" href="#main">
-          Перейти к содержимому
-        </a>
-        <StudyHubProvider
-          initialSession={initialSession}
-          initialData={initialData}
-          initialNow={initialNow}
-        >
-          <TeacherWorkspaceProvider>{children}</TeacherWorkspaceProvider>
-        </StudyHubProvider>
-        <noscript>Для работы StudyHUB включите JavaScript в браузере.</noscript>
+        <PreferencesProvider initialLocale={locale} initialTheme={theme}>
+          <SkipLink />
+          <StudyHubProvider
+            initialSession={initialSession}
+            initialData={initialData}
+            initialNow={initialNow}
+          >
+            <TeacherWorkspaceProvider>{children}</TeacherWorkspaceProvider>
+          </StudyHubProvider>
+        </PreferencesProvider>
+        <noscript>
+          {translate('Для работы StudyHUB включите JavaScript в браузере.', locale)}
+        </noscript>
       </body>
     </html>
   );

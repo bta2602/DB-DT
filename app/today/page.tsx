@@ -1,7 +1,10 @@
+import { pageMetadata } from '@/lib/studyhub/page-metadata';
 import { StudyHubApp } from '@/components/studyhub/studyhub-app';
 import { TodayPage } from '@/components/studyhub/today-page';
 
-export const metadata = { title: 'StudyHUB · Сегодня' };
+export async function generateMetadata() {
+  return pageMetadata('Сегодня');
+}
 
 export default function Page() {
   return (

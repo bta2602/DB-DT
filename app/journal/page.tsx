@@ -1,7 +1,10 @@
+import { pageMetadata } from '@/lib/studyhub/page-metadata';
 import { StudyHubApp } from '@/components/studyhub/studyhub-app';
 import { JournalPage } from '@/components/studyhub/teacher-pages';
 
-export const metadata = { title: 'StudyHUB · Журнал' };
+export async function generateMetadata() {
+  return pageMetadata('Журнал');
+}
 
 export default function Page() {
   return (

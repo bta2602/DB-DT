@@ -65,7 +65,7 @@ Content-Type с границей multipart выставляет браузер.
 | POST /api/assignments                  | Преподаватель; `title, description, steps, type, groupId, subjectId, teacherId, dueAt` |
 | POST /api/assignments/:id/submission   | Студент; multipart с одним `file`                                                      |
 | PATCH /api/submissions/:id/review      | Преподаватель; `action, grade, comment, version`                                       |
-| PUT /api/lessons/:id/grades/:studentId | Преподаватель; `grade, version`                                                        |
+| PUT /api/lessons/:id/grades/:studentId | Преподаватель; `grade, status, version`                                                |
 | PUT /api/lessons/:id/attendance        | Преподаватель; `entries, version`                                                      |
 | POST /api/materials                    | Преподаватель; multipart `subjectId, title, file`                                      |
 | DELETE /api/materials/:id              | Преподаватель назначенного предмета или администратор; пустой объект                   |
@@ -112,5 +112,41 @@ Content-Type с границей multipart выставляет браузер.
 
 `version` берётся из последнего `bootstrap`. Для новой оценки передаётся
 `version: null`; для посещаемости — `lesson.attendanceVersion`.
-Снятая оценка хранится как `grade: null` с обновлённой версией.
+Снятая оценка хранится как `grade: null, status: "unmarked"` с обновлённой версией.
 Запись и проверка версии выполняются в одной транзакции.
+
+## Единый журнал и шкала 0–100
+
+Запись `Grade` содержит `status`, `grade` и `version`:
+
+| status       | grade             | Отображение                    |
+| ------------ | ----------------- | ------------------------------ |
+| graded       | целое число 0–100 | Балл                           |
+| absent       | null              | Н — отсутствует                |
+| not_required | null              | н.п. — оценка не предусмотрена |
+| unmarked     | null              | Пустая ячейка                  |
+
+Нельзя одновременно отправить числовой балл и нечисловой статус. В среднем
+участвуют только числовые оценки, включая 0. Проверка работы также принимает
+целое число 0–100. Старый запрос без `status` совместим: число означает `graded`,
+`null` означает `unmarked`. Исторический attendance API оставлен для совместимости,
+но отдельной формы посещаемости нет. Он не заменяет уже выставленные баллы и н.п.
+В нём `absent` и `excused` ставят Н, если ячейка пуста или уже содержит Н;
+`present`, `late` и снятие отметки очищают только Н. Создать н.п. можно только
+запросом оценки с `status: "not_required"`.
+Изменение ячейки увеличивает также `attendanceVersion`, чтобы старая форма
+посещаемости не могла перезаписать свежую отметку журнала.
+
+Примеры тела `PUT /api/lessons/:id/grades/:studentId` для новой записи:
+
+```json
+{ "grade": 0, "status": "graded", "version": null }
+```
+
+```json
+{ "grade": null, "status": "not_required", "version": null }
+```
+
+При последующих изменениях передавайте актуальную `Grade.version`, а не `null`.
+После обновления серверной схемы прежние оценки 2–5 уже преобразованы в 40–100;
+новый запрос с числом 5 означает именно **5 из 100** и больше не пересчитывается.

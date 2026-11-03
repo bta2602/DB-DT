@@ -1,4 +1,6 @@
 'use client';
+
+import { useI18n } from './preferences';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
@@ -24,6 +26,7 @@ function AuthField({
   maxLength?: number;
   placeholder?: string;
 }) {
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
   const password = type === 'password';
   return (
@@ -45,9 +48,17 @@ function AuthField({
             className="auth-password-toggle"
             onClick={() => setVisible(!visible)}
             aria-pressed={visible}
-            aria-label={`${visible ? 'Скрыть' : 'Показать'} ${name === 'passwordConfirmation' ? 'повтор пароля' : 'пароль'}`}
+            aria-label={t(
+              name === 'passwordConfirmation'
+                ? visible
+                  ? 'Скрыть повтор пароля'
+                  : 'Показать повтор пароля'
+                : visible
+                  ? 'Скрыть пароль'
+                  : 'Показать пароль',
+            )}
           >
-            {visible ? 'Скрыть' : 'Показать'}
+            {visible ? t('Скрыть') : t('Показать')}
           </button>
         )}
       </div>
@@ -62,7 +73,7 @@ function AuthField({
         aria-live="polite"
         hidden={!error}
       >
-        {error}
+        {error ? t(error) : null}
       </span>
     </div>
   );
@@ -74,6 +85,7 @@ export function AuthPage({
   register?: boolean;
   returnPath?: string;
 }) {
+  const { t } = useI18n();
   const { request, reloadSession, ready, switchingRole, error: sessionError } = useStudyHub();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -92,8 +104,8 @@ export function AuthPage({
     setBusy(true);
     try {
       if (register && password !== passwordConfirmation)
-        throw new ApiError('Пароли не совпадают.', 422, {
-          passwordConfirmation: 'Повторите тот же пароль.',
+        throw new ApiError(t('Пароли не совпадают.'), 422, {
+          passwordConfirmation: t('Повторите тот же пароль.'),
         });
       await request(`/api/auth/${register ? 'register' : 'login'}`, {
         method: 'POST',
@@ -103,7 +115,7 @@ export function AuthPage({
       const home = session.user?.role === 'admin' ? '/overview' : '/today';
       router.replace(returnPath === '/' ? home : returnPath + window.location.search);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось войти.');
+      setError(cause instanceof Error ? cause.message : t('Не удалось войти.'));
       if (cause instanceof ApiError) setFields(cause.fields);
     } finally {
       setBusy(false);
@@ -114,14 +126,16 @@ export function AuthPage({
       <section className="login-story">
         <Brand />
         <div className="login-story-copy">
-          <div className="eyebrow">Учебная информация в одном месте</div>
+          <div className="eyebrow">{t('Учебная информация в одном месте')}</div>
           <h1>
-            Твой день.
+            {t('Твой день.')}
             <br />
-            Твой ритм.
+            {t('Твой ритм.')}
           </h1>
           <p>
-            Расписание, задания и результаты учёбы — в одном пространстве, где легко найти главное.
+            {t(
+              'Расписание, задания и результаты учёбы — в одном пространстве, где легко найти главное.',
+            )}
           </p>
           <div className="login-book-art" aria-hidden="true">
             <div className="banner-art">
@@ -137,54 +151,54 @@ export function AuthPage({
           <div className="login-benefits">
             <span>
               <Icon name="calendar" />
-              Расписание
+              {t('Расписание')}
             </span>
             <span>
               <Icon name="tasks" />
-              Задания
+              {t('Задания')}
             </span>
             <span>
               <Icon name="chart" />
-              Результаты
+              {t('Результаты')}
             </span>
           </div>
         </div>
-        <small>Меньше хаоса. Больше ясности.</small>
+        <small>{t('Меньше хаоса. Больше ясности.')}</small>
       </section>
       <section className="login-form-panel">
         <div className="login-form-inner">
-          <nav className="auth-mode-switch" aria-label="Доступ к аккаунту">
+          <nav className="auth-mode-switch" aria-label={t('Доступ к аккаунту')}>
             <Link
               href="/login"
               className={!register ? 'active' : ''}
               aria-current={!register ? 'page' : undefined}
             >
-              Вход
+              {t('Вход')}
             </Link>
             <Link
               href="/register"
               className={register ? 'active' : ''}
               aria-current={register ? 'page' : undefined}
             >
-              Регистрация
+              {t('Регистрация')}
             </Link>
           </nav>
-          <div className="eyebrow">{register ? 'Начнём знакомство' : 'С возвращением'}</div>
-          <h2 id="auth-title">{register ? 'Создать аккаунт' : 'Войти в StudyHUB'}</h2>
+          <div className="eyebrow">{register ? t('Начнём знакомство') : t('С возвращением')}</div>
+          <h2 id="auth-title">{register ? t('Создать аккаунт') : t('Войти в StudyHUB')}</h2>
           <p className="muted">
             {register
-              ? 'Твоё учебное пространство начинается здесь.'
-              : 'Продолжи с того места, где остановился.'}
+              ? t('Твоё учебное пространство начинается здесь.')
+              : t('Продолжи с того места, где остановился.')}
           </p>
           {sessionError && (
             <div className="publication-error" role="alert">
-              <span>{sessionError}</span>
+              <span>{t(sessionError)}</span>
               <button
                 type="button"
                 className="button small"
                 onClick={() => void reloadSession().catch((cause) => setError(cause.message))}
               >
-                Повторить
+                {t('Повторить')}
               </button>
             </div>
           )}
@@ -198,16 +212,16 @@ export function AuthPage({
             {register && (
               <AuthField
                 name="name"
-                label="Имя и фамилия"
+                label={t('Имя и фамилия')}
                 autoComplete="name"
                 maxLength={120}
                 error={fields.name}
-                placeholder="Как к вам обращаться"
+                placeholder={t('Как к вам обращаться')}
               />
             )}
             <AuthField
               name="email"
-              label="Электронная почта"
+              label={t('Электронная почта')}
               type="email"
               autoComplete="username"
               maxLength={254}
@@ -216,30 +230,32 @@ export function AuthPage({
             />
             <AuthField
               name="password"
-              label="Пароль"
+              label={t('Пароль')}
               type="password"
               autoComplete={register ? 'new-password' : 'current-password'}
               minLength={register ? 12 : undefined}
               maxLength={128}
               error={fields.password}
-              placeholder={register ? 'Придумайте пароль' : 'Введите пароль'}
+              placeholder={register ? t('Придумайте пароль') : t('Введите пароль')}
               hint={
-                register ? 'От 12 до 128 символов. Можно использовать слова и пробелы.' : undefined
+                register
+                  ? t('От 12 до 128 символов. Можно использовать слова и пробелы.')
+                  : undefined
               }
             />
             {register && (
               <AuthField
                 name="passwordConfirmation"
-                label="Повторите пароль"
+                label={t('Повторите пароль')}
                 type="password"
                 autoComplete="new-password"
                 maxLength={128}
                 error={fields.passwordConfirmation}
-                placeholder="Введите пароль ещё раз"
+                placeholder={t('Введите пароль ещё раз')}
               />
             )}
             <p className="error-text" role="alert">
-              {error}
+              {t(error)}
             </p>
             <button
               className="button primary full"
@@ -248,28 +264,29 @@ export function AuthPage({
             >
               {busy
                 ? register
-                  ? 'Создаём аккаунт…'
-                  : 'Входим…'
+                  ? t('Создаём аккаунт…')
+                  : t('Входим…')
                 : register
-                  ? 'Создать аккаунт'
-                  : 'Войти'}{' '}
+                  ? t('Создать аккаунт')
+                  : t('Войти')}{' '}
               <Icon name="arrow" className="sm" />
             </button>
           </form>
           <p className="auth-switch-help">
-            {register ? 'Уже есть аккаунт?' : 'Ещё нет аккаунта?'}{' '}
+            {register ? t('Уже есть аккаунт?') : t('Ещё нет аккаунта?')}{' '}
             <Link className="text-link" href={register ? '/login' : '/register'}>
-              {register ? 'Войти' : 'Зарегистрироваться'}
+              {register ? t('Войти') : t('Зарегистрироваться')}
             </Link>
           </p>
           <p className="login-help">
             {register
-              ? 'После регистрации откроется личный кабинет студента. Группу и доступ преподавателя назначает администратор.'
-              : 'Войдите с почтой и паролем своего аккаунта. Если вы преподаватель, права доступа назначает администратор.'}
+              ? t(
+                  'После регистрации откроется личный кабинет студента. Группу и доступ преподавателя назначает администратор.',
+                )
+              : t(
+                  'Войдите с почтой и паролем своего аккаунта. Если вы преподаватель, права доступа назначает администратор.',
+                )}
           </p>
-          <Link className="text-link" href="/about">
-            О проекте
-          </Link>
         </div>
         <footer>StudyHUB</footer>
       </section>

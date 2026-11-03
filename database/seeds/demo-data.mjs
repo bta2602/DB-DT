@@ -1,3 +1,4 @@
+import { journalGrades } from './journal-grades.mjs';
 import { cleanSeedSnapshot } from './clean-records.mjs';
 
 /**
@@ -398,7 +399,7 @@ export function createDemoData(now = new Date()) {
     'reviewed',
     schemaText,
     'sql',
-    4,
+    80,
     'Связи описаны верно. Добавьте ограничение на время окончания занятия.',
     26 * 60,
   );
@@ -419,7 +420,7 @@ export function createDemoData(now = new Date()) {
     'reviewed',
     schemaText,
     'sql',
-    5,
+    100,
     'Структура понятная, связи и ограничения описаны.',
     27 * 60,
   );
@@ -431,7 +432,7 @@ export function createDemoData(now = new Date()) {
     'reviewed',
     webText,
     'txt',
-    5,
+    100,
     'Учтены мобильный экран, пустое состояние и доступность.',
     23 * 60,
   );
@@ -462,7 +463,7 @@ export function createDemoData(now = new Date()) {
     'reviewed',
     'Демонстрационная работа\nСтудент: Сегодня, Расписание, Предметы, Задания.\nПреподаватель: Сегодня, Журнал, Проверка работ, Мои задания.\nПосле сохранения показываем подтверждение и возвращаем фокус к действию.\n',
     'txt',
-    4,
+    80,
     'Меню разделены по задачам. Добавьте сценарий выхода из аккаунта.',
     28 * 60,
   );
@@ -478,7 +479,7 @@ export function createDemoData(now = new Date()) {
             grades.push({
               lessonId: lesson.id,
               studentId: student.id,
-              grade: [5, 4, 5, 3, 4, 2][(lessonIndex + studentIndex) % 6],
+              grade: [100, 80, 100, 60, 80, 40][(lessonIndex + studentIndex) % 6],
               version: 1,
             });
           attendance.push({
@@ -552,7 +553,7 @@ export function createDemoData(now = new Date()) {
       lessons,
       assignments,
       submissions,
-      grades,
+      grades: journalGrades(grades, attendance),
       attendance,
       materials,
       announcements,

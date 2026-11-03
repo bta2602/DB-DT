@@ -7,7 +7,10 @@ export type Id = string;
 
 export type Role = 'student' | 'teacher' | 'admin';
 
-export type Mark = 2 | 3 | 4 | 5;
+/** Целое число от 0 до 100; диапазон проверяет сервер. */
+export type Mark = number;
+
+export type GradeStatus = 'graded' | 'not_required' | 'absent' | 'unmarked';
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
@@ -96,12 +99,13 @@ export type Submission = {
 
 /**
  * После снятия оценки запись остаётся:
- * grade = null, version содержит актуальную версию.
+ * grade = null, status = unmarked, version содержит актуальную версию.
  */
 export type Grade = {
   lessonId: Id;
   studentId: Id;
   grade: Mark | null;
+  status: GradeStatus;
   version: number;
 };
 
@@ -176,6 +180,8 @@ export type RegisterInput = {
 
 export type GradeInput = {
   grade: Mark | null;
+  /** Старый клиент может не передавать status: он выводится из grade. */
+  status?: GradeStatus;
   version: number | null;
 };
 

@@ -1,0 +1,62 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.preference-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.preference-controls select,
+.theme-toggle {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--white);
+  color: var(--ink);
+}
+.preference-controls select {
+  width: 112px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: 8px;
+}
+.theme-toggle:hover,
+.preference-controls select:hover {
+  border-color: var(--green);
+}
+.auth-preferences {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  right: 24px;
+}
+@media (max-width: 720px) {
+  .topbar .user-role {
+    display: none;
+  }
+  .preference-controls select {
+    width: 106px;
+  }
+  .auth-preferences {
+    top: 14px;
+    right: 16px;
+  }
+  .publication-login .login-form-panel {
+    padding-top: 80px;
+  }
+}

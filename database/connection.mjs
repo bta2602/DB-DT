@@ -2,9 +2,34 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { resolve, relative, isAbsolute, sep } from 'node:path';
 import { authSchema, schoolSchema, learningSchema } from './schema.mjs';
+import { migrateSqliteGrading } from './migrations/grading-100.mjs';
 
-const connections = new Map();
-const activeTransaction = new AsyncLocalStorage();
+// Next.js can load server modules more than once; keep one pool per database/process.
+const runtimeKey = Symbol.for('studyhub.database.runtime');
+const runtime = (globalThis[runtimeKey] ||= {
+  connections: new Map(),
+  activeTransaction: new AsyncLocalStorage(),
+});
+const { connections, activeTransaction } = runtime;
+
+// Log only error classes; SQL, credentials, cookies and user data never enter this object.
+export function databaseErrorInfo(error) {
+  const message = error instanceof Error ? error.message : '';
+  return {
+    name: error instanceof Error ? error.name : 'UnknownError',
+    code:
+      typeof error?.code === 'string' && /^[A-Z0-9_]{1,60}$/i.test(error.code)
+        ? error.code
+        : 'UNKNOWN',
+    reason: /connection.*timeout|timeout.*connection/i.test(message)
+      ? 'connection_timeout'
+      : /timeout|timed out/i.test(message)
+        ? 'timeout'
+        : /connection terminated|connection ended|socket|ECONN/i.test(message)
+          ? 'connection_closed'
+          : 'other',
+  };
+}
 
 // Existing SQL uses ? parameters. Convert only placeholders outside quoted values.
 export function postgresSql(sql) {
@@ -100,6 +125,10 @@ async function connect(key) {
       connectionTimeoutMillis: 15000,
       allowExitOnIdle: true,
     });
+    // pg removes the idle client itself; handling the event keeps the server alive.
+    pool.on('error', (error) =>
+      console.error('[StudyHUB DB] Idle connection failed:', databaseErrorInfo(error)),
+    );
     const db = wrapper(
       'postgres',
       (sql, args) => pool.query(postgresSql(sql), args),
@@ -166,6 +195,7 @@ async function connect(key) {
       'ALTER TABLE auth_users ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0 CHECK(is_demo IN (0,1))',
     );
   sqlite.exec(learningSchema);
+  migrateSqliteGrading(sqlite);
   chmodSync(filename, 0o600);
   const queue = serialQueue();
   const query = (sql, args) => {

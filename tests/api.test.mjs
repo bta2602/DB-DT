@@ -109,6 +109,10 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
         const { response, data } = await client.call(path);
         assert.match(response.headers.get('content-type'), /text\/html/);
         assert.match(data, /StudyHUB/i, `Missing application content at ${path}`);
+        if (path === '/about' && new URL(response.url).pathname !== '/') {
+          // An async layout may start streaming before redirect() emits its refresh tag.
+          assert.match(data, /<meta[^>]+http-equiv="refresh"[^>]+content="[^"]*url=\/"/i);
+        }
       }
     }
     await guest.call('/page-that-does-not-exist', {}, 404);
@@ -354,30 +358,85 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
 
   await t.test('Grade saves, optimistic locking, removal and student privacy', async () => {
     const path = `/api/lessons/${lesson.id}/grades/${studentUser.id}`;
-    await teacher.call(path, { method: 'PUT', body: { grade: 5, version: null } });
-    await teacher.call(path, { method: 'PUT', body: { grade: 2, version: null } }, 409);
+    await teacher.call(path, { method: 'PUT', body: { grade: 0, version: null } });
+    await teacher.call(path, { method: 'PUT', body: { grade: 50, version: null } }, 409);
     let grade = (await student.bootstrap()).grades.find((row) => row.lessonId === lesson.id);
-    assert.equal(grade.grade, 5);
+    assert.equal(grade.grade, 0);
+    assert.equal(grade.status, 'graded');
     await teacher.call(path, { method: 'PUT', body: { grade: null, version: grade.version } });
     grade = (await student.bootstrap()).grades.find((row) => row.lessonId === lesson.id);
     assert.equal(grade.grade, null);
+    assert.equal(grade.status, 'unmarked');
     assert.equal(grade.version, 2);
-    await teacher.call(path, { method: 'PUT', body: { grade: 4, version: grade.version } });
-    await teacher.call(path, { method: 'PUT', body: { grade: 10, version: 3 } }, 422);
-    await student.call(path, { method: 'PUT', body: { grade: 5, version: 3 } }, 403);
+    for (const status of ['not_required', 'absent', 'unmarked']) {
+      const previousVersion = grade.version;
+      await teacher.call(path, {
+        method: 'PUT',
+        body: { grade: null, status, version: previousVersion },
+      });
+      await teacher.call(
+        path,
+        { method: 'PUT', body: { grade: 10, status: 'graded', version: previousVersion } },
+        409,
+      );
+      grade = (await student.bootstrap()).grades.find((row) => row.lessonId === lesson.id);
+      assert.equal(grade.status, status);
+      assert.equal(grade.grade, null);
+      assert.equal(grade.version, previousVersion + 1);
+    }
+    for (const value of [-1, 101, 10.5, '50'])
+      await teacher.call(
+        path,
+        { method: 'PUT', body: { grade: value, status: 'graded', version: grade.version } },
+        422,
+      );
+    await teacher.call(
+      path,
+      { method: 'PUT', body: { grade: 0, status: 'not_required', version: grade.version } },
+      422,
+    );
+    await teacher.call(
+      path,
+      { method: 'PUT', body: { grade: null, status: 'graded', version: grade.version } },
+      422,
+    );
+    await teacher.call(path, {
+      method: 'PUT',
+      body: { grade: 100, status: 'graded', version: grade.version },
+    });
+    grade = (await student.bootstrap()).grades.find((row) => row.lessonId === lesson.id);
+    assert.equal(grade.grade, 100);
+    await student.call(
+      path,
+      { method: 'PUT', body: { grade: 100, status: 'graded', version: grade.version } },
+      403,
+    );
     assert.ok(!(await peer.bootstrap()).grades.some((row) => row.studentId === studentUser.id));
   });
 
   await t.test('Attendance saves atomically and stale changes are rejected', async () => {
     const path = `/api/lessons/${lesson.id}/attendance`;
+    await teacher.call(
+      path,
+      {
+        method: 'PUT',
+        body: {
+          entries: [{ studentId: studentUser.id, status: 'absent' }],
+          version: lesson.attendanceVersion,
+        },
+      },
+      409,
+    );
+    lesson = (await teacher.bootstrap()).lessons.find((row) => row.id === lesson.id);
     const input = {
-      entries: [{ studentId: studentUser.id, status: 'late' }],
+      entries: [{ studentId: studentUser.id, status: 'absent' }],
       version: lesson.attendanceVersion,
     };
     await teacher.call(path, { method: 'PUT', body: input });
     await teacher.call(path, { method: 'PUT', body: input }, 409);
     let data = await student.bootstrap();
-    assert.equal(data.attendance.find((row) => row.lessonId === lesson.id).status, 'late');
+    assert.equal(data.attendance.find((row) => row.lessonId === lesson.id).status, 'absent');
+    assert.equal(data.grades.find((row) => row.lessonId === lesson.id).grade, 100);
     const updated = (await teacher.bootstrap()).lessons.find((row) => row.id === lesson.id);
     await teacher.call(path, {
       method: 'PUT',
@@ -388,7 +447,59 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
     });
     data = await student.bootstrap();
     assert.ok(!data.attendance.some((row) => row.lessonId === lesson.id));
+    assert.equal(data.grades.find((row) => row.lessonId === lesson.id).grade, 100);
     await student.call(path, { method: 'PUT', body: input }, 403);
+
+    const grade = data.grades.find((row) => row.lessonId === lesson.id);
+    await teacher.call(`/api/lessons/${lesson.id}/grades/${studentUser.id}`, {
+      method: 'PUT',
+      body: { grade: null, status: 'unmarked', version: grade.version },
+    });
+    let attendanceVersion = (await teacher.bootstrap()).lessons.find(
+      (row) => row.id === lesson.id,
+    ).attendanceVersion;
+    for (const [status, journalStatus] of [
+      ['absent', 'absent'],
+      ['excused', 'absent'],
+      ['present', 'unmarked'],
+    ]) {
+      await teacher.call(path, {
+        method: 'PUT',
+        body: { entries: [{ studentId: studentUser.id, status }], version: attendanceVersion++ },
+      });
+      data = await student.bootstrap();
+      const mark = data.grades.find((row) => row.lessonId === lesson.id);
+      assert.equal(mark.status, journalStatus);
+      assert.equal(mark.grade, null);
+    }
+    const unmarked = data.grades.find((row) => row.lessonId === lesson.id);
+    await teacher.call(`/api/lessons/${lesson.id}/grades/${studentUser.id}`, {
+      method: 'PUT',
+      body: { grade: null, status: 'not_required', version: unmarked.version },
+    });
+    await teacher.call(
+      path,
+      {
+        method: 'PUT',
+        body: {
+          entries: [{ studentId: studentUser.id, status: 'absent' }],
+          version: attendanceVersion,
+        },
+      },
+      409,
+    );
+    attendanceVersion = (await teacher.bootstrap()).lessons.find(
+      (row) => row.id === lesson.id,
+    ).attendanceVersion;
+    for (const status of ['absent', 'excused', 'present', null]) {
+      await teacher.call(path, {
+        method: 'PUT',
+        body: { entries: [{ studentId: studentUser.id, status }], version: attendanceVersion++ },
+      });
+      const mark = (await student.bootstrap()).grades.find((row) => row.lessonId === lesson.id);
+      assert.equal(mark.status, 'not_required');
+      assert.equal(mark.grade, null);
+    }
   });
 
   await t.test('Teacher publishes an assignment and student sees it', async () => {
@@ -464,7 +575,7 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
         method: 'PATCH',
         body: {
           action: 'grade',
-          grade: 5,
+          grade: 100,
           comment: 'Попытка изменить свою оценку',
           version: work.version,
         },
@@ -475,7 +586,7 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
       method: 'PATCH',
       body: {
         action: 'grade',
-        grade: 5,
+        grade: 0,
         comment: 'Работа выполнена верно.',
         version: work.version,
       },
@@ -486,7 +597,7 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
         method: 'PATCH',
         body: {
           action: 'grade',
-          grade: 2,
+          grade: 60,
           comment: 'Устаревшая форма',
           version: work.version,
         },
@@ -495,8 +606,21 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
     );
     work = (await student.bootstrap()).submissions.find((row) => row.id === submission.id);
     assert.equal(work.status, 'reviewed');
-    assert.equal(work.grade, 5);
+    assert.equal(work.grade, 0);
     assert.equal(work.comment, 'Работа выполнена верно.');
+    for (const grade of [-1, 101, 50.5]) {
+      await teacher.call(
+        path,
+        { method: 'PATCH', body: { action: 'grade', grade, comment: '', version: work.version } },
+        422,
+      );
+    }
+    await teacher.call(path, {
+      method: 'PATCH',
+      body: { action: 'grade', grade: 100, comment: work.comment, version: work.version },
+    });
+    work = (await student.bootstrap()).submissions.find((row) => row.id === submission.id);
+    assert.equal(work.grade, 100);
     await student.call(
       `/api/assignments/${assignment.id}/submission`,
       {

@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from './preferences';
+
 import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import type { User } from '@/lib/studyhub/api-contract';
 import { initials, roles } from '@/lib/studyhub/client-utils';
@@ -42,10 +44,11 @@ export function PageHeading({
   description?: string;
   action?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="page-heading">
       <div>
-        <div className="eyebrow">Учебное пространство · StudyHUB</div>
+        <div className="eyebrow">{t('Учебное пространство · StudyHUB')}</div>
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>
@@ -74,17 +77,18 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 export function Person({ user }: { user?: User | null }) {
+  const { t } = useI18n();
   const { data } = useStudyHub();
   return (
     <div className="student-cell">
       <span className="avatar">{initials(user?.name)}</span>
       <div>
-        <strong>{user?.name || 'Пользователь'}</strong>
+        <strong>{user?.name || t('Пользователь')}</strong>
         <small>
           {user?.groupId
             ? data.groups.find((group) => group.id === user.groupId)?.name
             : user
-              ? roles[user.role]
+              ? t(roles[user.role])
               : ''}
         </small>
       </div>
@@ -106,6 +110,7 @@ export function Modal({
   closeDisabled?: boolean;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
+  const { t } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
   const backdropPressed = useRef(false);
   const headingId = useId();
@@ -155,7 +160,7 @@ export function Modal({
         <button
           type="button"
           className="icon-btn"
-          aria-label="Закрыть"
+          aria-label={t('Закрыть')}
           onClick={onClose}
           disabled={closeDisabled}
         >

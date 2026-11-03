@@ -1,4 +1,4 @@
-import type { Bootstrap, Lesson, Role } from './api-contract';
+import type { Bootstrap, Grade, Lesson, Role } from './api-contract';
 
 export const TIME_ZONE = 'Asia/Qyzylorda';
 export const roles: Record<Role, string> = {
@@ -30,11 +30,35 @@ const keyFormatter = new Intl.DateTimeFormat('sv-SE', {
   month: '2-digit',
   day: '2-digit',
 });
-const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: TIME_ZONE,
-  day: 'numeric',
-  month: 'long',
-});
+const localeTags = { ru: 'ru-RU', kk: 'kk-KZ', en: 'en-GB' };
+const dateFormatters = Object.fromEntries(
+  Object.entries(localeTags)
+    .filter(([locale]) => locale !== 'kk')
+    .map(([locale, tag]) => [
+      locale,
+      new Intl.DateTimeFormat(tag, {
+        timeZone: TIME_ZONE,
+        day: 'numeric',
+        month: 'long',
+      }),
+    ]),
+);
+// Some browsers lack Kazakh month names in ICU and display “M10”. Keep the
+// standard CLDR names here and use numeric date parts in the college time zone.
+const kazakhMonths = [
+  'қаңтар',
+  'ақпан',
+  'наурыз',
+  'сәуір',
+  'мамыр',
+  'маусым',
+  'шілде',
+  'тамыз',
+  'қыркүйек',
+  'қазан',
+  'қараша',
+  'желтоқсан',
+];
 const timeFormatter = new Intl.DateTimeFormat('ru-RU', {
   timeZone: TIME_ZONE,
   hour: '2-digit',
@@ -42,10 +66,17 @@ const timeFormatter = new Intl.DateTimeFormat('ru-RU', {
   hour12: false,
 });
 export const dateKey = (date: Date | string = new Date()) => keyFormatter.format(new Date(date));
-export const formatDate = (value?: string | null) =>
-  value
-    ? dateFormatter.format(new Date(value.length === 10 ? value + 'T12:00:00+05:00' : value))
-    : '—';
+export function formatDate(value?: string | null, locale: keyof typeof localeTags = 'ru') {
+  if (!value) return '—';
+  const date = new Date(value.length === 10 ? value + 'T12:00:00+05:00' : value);
+  if (locale === 'kk') {
+    const parts = keyFormatter.formatToParts(date);
+    const day = Number(parts.find((part) => part.type === 'day')?.value);
+    const month = Number(parts.find((part) => part.type === 'month')?.value);
+    return `${day} ${kazakhMonths[month - 1]}`;
+  }
+  return dateFormatters[locale].format(date);
+}
 export const formatTime = (value?: string | null) =>
   value ? timeFormatter.format(new Date(value)) : '—';
 export function average(values: (number | string | null | undefined)[]) {
@@ -54,11 +85,21 @@ export function average(values: (number | string | null | undefined)[]) {
       (value) =>
         value !== null &&
         value !== undefined &&
-        value !== '' &&
-        [2, 3, 4, 5].includes(Number(value)),
+        (typeof value !== 'string' || value.trim() !== '') &&
+        Number.isInteger(Number(value)) &&
+        Number(value) >= 0 &&
+        Number(value) <= 100,
     )
     .map(Number);
   return marks.length ? marks.reduce((a, b) => a + b, 0) / marks.length : null;
+}
+export function numericGrade(record?: Pick<Grade, 'grade' | 'status'>) {
+  return record?.status === 'graded' ? record.grade : null;
+}
+export function gradeLabel(record?: Pick<Grade, 'grade' | 'status'>) {
+  if (record?.status === 'absent') return 'Н';
+  if (record?.status === 'not_required') return 'н.п.';
+  return numericGrade(record) ?? '—';
 }
 export function lessonStatus(
   lesson: Pick<Lesson, 'status' | 'startsAt' | 'endsAt'>,

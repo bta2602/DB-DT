@@ -11,6 +11,7 @@ import {
 } from 'react';
 import type { Bootstrap, Role, Session, User } from '@/lib/studyhub/api-contract';
 import { emptyData } from '@/lib/studyhub/client-utils';
+import { useI18n } from './preferences';
 
 export class ApiError extends Error {
   constructor(
@@ -60,6 +61,11 @@ export function StudyHubProvider({
   initialData: Bootstrap;
   initialNow: number;
 }) {
+  const { t } = useI18n();
+  const translator = useRef(t);
+  useEffect(() => {
+    translator.current = t;
+  }, [t]);
   const [now, setNow] = useState(initialNow);
   const [user, setUser] = useState<User | null>(initialSession?.user || null);
   const [data, setData] = useState<Bootstrap>(initialData);
@@ -139,9 +145,14 @@ export function StudyHubProvider({
           }
         }
         throw new ApiError(
-          result.error?.message || 'Не удалось выполнить действие.',
+          translator.current(result.error?.message || 'Не удалось выполнить действие.'),
           response.status,
-          result.error?.fields || {},
+          Object.fromEntries(
+            Object.entries(result.error?.fields || {}).map(([key, value]) => [
+              key,
+              translator.current(String(value)),
+            ]),
+          ),
         );
       }
       if (typeof result.csrfToken === 'string') token.current = result.csrfToken;
@@ -249,12 +260,23 @@ export function StudyHubProvider({
   }, [notice]);
 
   const downloadFile = useCallback(async (id: string, fallbackName = 'material') => {
-    const response = await fetch(`/api/files/${encodeURIComponent(id)}`, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!response.ok) throw new ApiError('Файл недоступен или у вас нет доступа.', response.status);
+    let response: Response;
+    let blob: Blob;
+    try {
+      response = await fetch(`/api/files/${encodeURIComponent(id)}`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok)
+        throw new ApiError('Файл недоступен или у вас нет доступа.', response.status);
+      blob = await response.blob();
+    } catch (cause) {
+      if (cause instanceof ApiError) throw cause;
+      throw new ApiError(
+        'Не удалось связаться с сервером. Проверьте соединение и повторите попытку.',
+      );
+    }
     const disposition = response.headers.get('Content-Disposition') || '';
     const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
     const plainName = disposition.match(/filename="([^"]+)"/i)?.[1];
@@ -266,7 +288,7 @@ export function StudyHubProvider({
         /* Keep the safe fallback. */
       }
     }
-    const url = URL.createObjectURL(await response.blob());
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = name;
@@ -280,7 +302,7 @@ export function StudyHubProvider({
         user,
         data,
         ready,
-        error,
+        error: t(error),
         now,
         demoEnabled,
         switchingRole,
@@ -295,7 +317,7 @@ export function StudyHubProvider({
     >
       {children}
       <div className={`toast ${notice ? 'visible' : ''}`} role="status" aria-live="polite">
-        {notice}
+        {t(notice)}
       </div>
     </StudyHubContext.Provider>
   );

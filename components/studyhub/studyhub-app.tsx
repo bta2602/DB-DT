@@ -9,6 +9,8 @@ import { useStudyHub } from './context';
 import { AuthPage } from './auth-page';
 import { DemoRoleControl } from './demo-role-control';
 import { Brand, EmptyState, Icon, Modal } from './shared';
+import { useI18n } from './preferences';
+import { PreferenceControls } from './preference-controls';
 
 const titles: Record<string, string> = {
   today: 'Сегодня',
@@ -22,7 +24,6 @@ const titles: Record<string, string> = {
   subjects: 'Предметы',
   tasks: 'Задания',
   profile: 'Профиль',
-  about: 'О проекте',
 };
 const menus: Record<Role, [string, string][]> = {
   admin: [
@@ -54,6 +55,7 @@ export function StudyHubApp({
   section?: string;
   children?: ReactNode;
 }) {
+  const { t, locale } = useI18n();
   const { user, data, ready, error, now, request, reloadSession, refresh, notify, switchingRole } =
     useStudyHub();
   const router = useRouter();
@@ -65,6 +67,10 @@ export function StudyHubApp({
   const mobileMenuButton = useRef<HTMLButtonElement>(null);
   const accountReturnFocus = useRef<HTMLElement | null>(null);
   const page = section || (user?.role === 'admin' ? 'overview' : 'today');
+
+  useEffect(() => {
+    document.title = `StudyHUB · ${t(titles[page] || (page === 'register' ? 'Регистрация' : 'Вход'))}`;
+  }, [page, t]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -119,41 +125,36 @@ export function StudyHubApp({
   }
 
   if (!user) {
-    if (section === 'about') {
-      return (
-        <main id="main" className="guest-about">
-          <Link className="button mb" href="/login">
-            Войти в StudyHUB
-          </Link>
-          {children}
-        </main>
-      );
-    }
     return (
-      <AuthPage
-        key={section === 'register' ? 'register' : 'login'}
-        register={section === 'register'}
-        returnPath={section && !['login', 'register'].includes(section) ? '/' + section : '/'}
-      />
+      <>
+        <div className="auth-preferences">
+          <PreferenceControls />
+        </div>
+        <AuthPage
+          key={section === 'register' ? 'register' : 'login'}
+          register={section === 'register'}
+          returnPath={section && !['login', 'register'].includes(section) ? '/' + section : '/'}
+        />
+      </>
     );
   }
   if (!ready || ['login', 'register'].includes(section)) {
     return (
       <main id="main" className="boot-state" role="status">
-        Открываем StudyHUB…
+        {t('Открываем StudyHUB…')}
       </main>
     );
   }
 
   const nav = menus[user.role];
-  const allowed = nav.some(([item]) => item === page) || ['profile', 'about'].includes(page);
+  const allowed = nav.some(([item]) => item === page) || page === 'profile';
   const waiting = data.submissions.filter((submission) => submission.status === 'submitted').length;
   const workspaceDescription =
     user.role === 'teacher'
-      ? 'Журнал и проверка работ'
+      ? t('Журнал и проверка работ')
       : user.role === 'admin'
-        ? 'Управление платформой'
-        : data.groups.find((group) => group.id === user.groupId)?.name || 'Личный кабинет';
+        ? t('Управление платформой')
+        : data.groups.find((group) => group.id === user.groupId)?.name || t('Личный кабинет');
 
   return (
     <>
@@ -161,13 +162,13 @@ export function StudyHubApp({
         type="button"
         className={`mobile-nav-shade ${menu ? 'open' : ''}`}
         onClick={() => setMenu(false)}
-        aria-label="Закрыть меню"
+        aria-label={t('Закрыть меню')}
         tabIndex={menu ? 0 : -1}
       />
       <aside
         className={`sidebar ${menu ? 'open' : ''}`}
         id="main-navigation"
-        aria-label="Главная навигация"
+        aria-label={t('Главная навигация')}
       >
         <Brand />
         <div className="workspace">
@@ -175,12 +176,12 @@ export function StudyHubApp({
             <Icon name="building" className="sm" />
           </span>
           <div>
-            <strong>Учебное пространство</strong>
+            <strong>{t('Учебное пространство')}</strong>
             <small>{workspaceDescription}</small>
           </div>
         </div>
         <div className="eyebrow nav-label">
-          {user.role === 'admin' ? 'Администрирование' : 'Личный кабинет'}
+          {t(user.role === 'admin' ? 'Администрирование' : 'Личный кабинет')}
         </div>
         <nav className="nav-list">
           {nav.map(([item, icon]) => (
@@ -192,27 +193,15 @@ export function StudyHubApp({
               onClick={() => setMenu(false)}
             >
               <Icon name={icon} />
-              {titles[item]}
+              {t(titles[item])}
               {item === 'review' && waiting > 0 && <span className="nav-count">{waiting}</span>}
             </Link>
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        <Link
-          className={`nav-item ${page === 'about' ? 'active' : ''}`}
-          href="/about"
-          aria-current={page === 'about' ? 'page' : undefined}
-          onClick={() => setMenu(false)}
-        >
-          <Icon name="info" />О проекте
-        </Link>
         <div className="sidebar-note">
-          <div className="eyebrow">Меньше хаоса. Больше ясности.</div>
-          <p>
-            Всё, что нужно для учёбы,
-            <br />
-            теперь в одном месте.
-          </p>
+          <div className="eyebrow">{t('Меньше хаоса. Больше ясности.')}</div>
+          <p>{t('Всё, что нужно для учёбы, теперь в одном месте.')}</p>
         </div>
         <button
           ref={accountButton}
@@ -220,13 +209,13 @@ export function StudyHubApp({
           className="profile-btn"
           aria-haspopup="dialog"
           aria-expanded={accountOpen}
-          aria-label={`Открыть меню аккаунта: ${user.name}`}
+          aria-label={t('Открыть меню аккаунта: {name}', { name: user.name })}
           onClick={openAccount}
         >
           <span className="avatar teacher">{initials(user.name)}</span>
           <span className="grow">
             <strong>{user.name}</strong>
-            <small>{roles[user.role]}</small>
+            <small>{t(roles[user.role])}</small>
           </span>
           <Icon name="chevron" className="sm" />
         </button>
@@ -238,7 +227,7 @@ export function StudyHubApp({
               ref={mobileMenuButton}
               type="button"
               className="icon-btn mobile-menu"
-              aria-label="Открыть меню"
+              aria-label={t('Открыть меню')}
               aria-controls="main-navigation"
               aria-expanded={menu}
               onClick={() => setMenu(!menu)}
@@ -246,17 +235,18 @@ export function StudyHubApp({
               <Icon name="menu" />
             </button>
             <div className="breadcrumb">
-              <span>Личный кабинет</span>
+              <span>{t('Личный кабинет')}</span>
               <Icon name="chevron" className="sm" />
-              <strong>{titles[page] || 'StudyHUB'}</strong>
+              <strong>{t(titles[page] || 'StudyHUB')}</strong>
             </div>
           </div>
           <div className="top-actions">
-            <span className="user-role">{roles[user.role]}</span>
+            <span className="user-role">{t(roles[user.role])}</span>
+            <PreferenceControls />
             <button
               type="button"
               className="icon-btn"
-              aria-label="Обновить данные"
+              aria-label={t('Обновить данные')}
               disabled={busy || switchingRole}
               onClick={() => void refreshData()}
             >
@@ -271,30 +261,30 @@ export function StudyHubApp({
         >
           {error && (
             <div className="publication-error" role="alert">
-              {error}
+              {t(error)}
             </div>
           )}
-          <Suspense fallback={<p role="status">Загрузка раздела…</p>}>
+          <Suspense fallback={<p role="status">{t('Загрузка раздела…')}</p>}>
             {allowed ? (
               <Fragment key={user.id}>{children}</Fragment>
             ) : (
               <EmptyState
-                title="Раздел недоступен"
-                description="Этот раздел доступен другой роли. Выберите страницу в меню."
+                title={t('Раздел недоступен')}
+                description={t('Этот раздел доступен другой роли. Выберите страницу в меню.')}
               />
             )}
           </Suspense>
           <footer className="page-footer">
             <span>
-              <Icon name="book" className="sm" /> StudyHUB · Учебная информация в одном месте
+              <Icon name="book" className="sm" /> StudyHUB · {t('Учебная информация в одном месте')}
             </span>
-            <span>{formatDate(dateKey(new Date(now)))}</span>
+            <span>{formatDate(dateKey(new Date(now)), locale)}</span>
           </footer>
         </main>
       </div>
       {accountOpen && (
         <Modal
-          title="Аккаунт"
+          title={t('Аккаунт')}
           className="account-dialog"
           closeDisabled={loggingOut || switchingRole}
           returnFocusRef={accountReturnFocus}
@@ -304,7 +294,7 @@ export function StudyHubApp({
             <span className="avatar teacher account-avatar">{initials(user.name)}</span>
             <div>
               <h3>{user.name}</h3>
-              <p className="account-role">{roles[user.role]}</p>
+              <p className="account-role">{t(roles[user.role])}</p>
               <p className="account-email">{user.email}</p>
             </div>
           </div>
@@ -318,7 +308,7 @@ export function StudyHubApp({
             }}
           >
             <Icon name="users" className="sm" />
-            Открыть профиль
+            {t('Открыть профиль')}
           </Link>
           <DemoRoleControl inAccount disabled={busy} onSelected={() => setAccountOpen(false)} />
           <div className="account-actions">
@@ -329,7 +319,7 @@ export function StudyHubApp({
               onClick={() => void logout()}
             >
               <Icon name="logout" className="sm" />
-              {loggingOut ? 'Выходим…' : 'Выйти из аккаунта'}
+              {t(loggingOut ? 'Выходим…' : 'Выйти из аккаунта')}
             </button>
           </div>
         </Modal>

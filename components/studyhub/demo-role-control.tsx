@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from './preferences';
+
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import type { Role } from '@/lib/studyhub/api-contract';
@@ -17,6 +19,7 @@ export function DemoRoleControl({
   disabled?: boolean;
   onSelected?: () => void;
 }) {
+  const { t } = useI18n();
   const { user, demoEnabled, ready, switchRole, switchingRole } = useStudyHub();
   const router = useRouter();
   const labelId = useId();
@@ -31,7 +34,7 @@ export function DemoRoleControl({
       onSelected?.();
       router.replace(session.user?.role === 'admin' ? '/overview' : '/today');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось переключить роль.');
+      setError(cause instanceof Error ? cause.message : t('Не удалось переключить роль.'));
     }
   }
 
@@ -42,14 +45,14 @@ export function DemoRoleControl({
       aria-busy={switchingRole}
     >
       <strong className="role-control-label" id={labelId}>
-        {inAccount ? 'Выбрать роль' : 'Учебный доступ'}
+        {inAccount ? t('Выбрать роль') : t('Учебный доступ')}
       </strong>
       {!inAccount && (
         <p className="role-control-description">
-          Выберите роль и откройте учебное пространство без регистрации.
+          {t('Выберите роль и откройте учебное пространство без регистрации.')}
         </p>
       )}
-      <div className="role-control-options" role="group" aria-label="Выбор роли">
+      <div className="role-control-options" role="group" aria-label={t('Выбор роли')}>
         {demoRoles.map((role) => (
           <button
             type="button"
@@ -59,18 +62,18 @@ export function DemoRoleControl({
             disabled={disabled || !ready || switchingRole}
             onClick={() => void chooseRole(role)}
           >
-            {roles[role]}
+            {t(roles[role])}
           </button>
         ))}
       </div>
       {switchingRole && (
         <span className="small muted" role="status">
-          Открываем кабинет…
+          {t('Открываем кабинет…')}
         </span>
       )}
       {error && (
         <p className="role-control-error error-text" role="alert">
-          {error}
+          {t(error)}
         </p>
       )}
     </section>

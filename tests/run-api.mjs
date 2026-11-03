@@ -91,9 +91,18 @@ try {
   await access(join(root, '.next', 'BUILD_ID')).catch(() => {
     throw new Error('Run npm run build before npm test.');
   });
-  await run(['--test', '--test-reporter=spec', 'tests/storage.test.mjs'], {
-    STUDYHUB_TEST_STORAGE_DIR: join(directory, 'ordinary-database'),
-  });
+  await run(
+    [
+      '--test',
+      '--test-reporter=spec',
+      'tests/grading.test.mjs',
+      'tests/i18n.test.mjs',
+      'tests/storage.test.mjs',
+    ],
+    {
+      STUDYHUB_TEST_STORAGE_DIR: join(directory, 'ordinary-database'),
+    },
+  );
   await run(['--test', '--test-reporter=spec', 'tests/seed-upgrade.test.mjs'], {
     STUDYHUB_TEST_SEED_DIR: directory,
   });

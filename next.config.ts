@@ -5,6 +5,12 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: { '/*': ['./.studyhub/**/*', './.git/**/*'] },
   async redirects() {
     return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'studyhub-db-dt.vercel.app' }],
+        destination: 'https://studyhub-kz.vercel.app/:path*',
+        permanent: true,
+      },
       { source: '/studyhub/index.html', destination: '/', permanent: false },
       { source: '/studyhub', destination: '/', permanent: false },
     ];

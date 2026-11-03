@@ -9,20 +9,17 @@ import {
   dateKey,
   formatDate,
   formatTime,
+  gradeLabel,
+  numericGrade,
   lessonStatus,
   roles,
   statusNames,
 } from '@/lib/studyhub/client-utils';
 import { useStudyHub } from './context';
+import { useI18n } from './preferences';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading } from './shared';
 import { AnnouncementsPanel } from './publication-panels';
 
-const attendanceLabels = {
-  present: 'Присутствует',
-  absent: 'Отсутствует',
-  late: 'Опоздание',
-  excused: 'Уважительная причина',
-};
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : 'Не удалось выполнить действие. Попробуйте ещё раз.';
 const assignmentStatus = (submission?: Submission) => submission?.status ?? 'missing';
@@ -34,12 +31,13 @@ function AssignmentCards({
   assignments: Assignment[];
   onOpen: (id: string) => void;
 }) {
+  const { t, locale } = useI18n();
   const { data, user } = useStudyHub();
   if (!assignments.length)
     return (
       <EmptyState
-        title="Заданий пока нет"
-        description="Новые задания появятся после публикации преподавателем."
+        title={t('Заданий пока нет')}
+        description={t('Новые задания появятся после публикации преподавателем.')}
       />
     );
   return (
@@ -65,7 +63,7 @@ function AssignmentCards({
                       : 'neutral'
                 }
               >
-                {statusNames[assignmentStatus(submission)]}
+                {t(statusNames[assignmentStatus(submission)])}
               </Badge>
               <small>
                 {data.subjects.find((subject) => subject.id === assignment.subjectId)?.name}
@@ -75,8 +73,11 @@ function AssignmentCards({
             <p>{assignment.type}</p>
             <footer>
               {submission?.status === 'reviewed'
-                ? `Оценка ${submission.grade ?? '—'} из 5`
-                : `До ${formatDate(assignment.dueAt)}, ${formatTime(assignment.dueAt)}`}
+                ? t('Оценка {value0} из 100', { value0: String(submission.grade ?? '—') })
+                : t('До {value0}, {value1}', {
+                    value0: String(formatDate(assignment.dueAt, locale)),
+                    value1: String(formatTime(assignment.dueAt)),
+                  })}
               <Icon name="arrow" className="sm" />
             </footer>
           </button>
@@ -93,6 +94,7 @@ function AssignmentDialog({
   assignment: Assignment;
   onClose: () => void;
 }) {
+  const { t, locale } = useI18n();
   const { data, user, mutate, downloadFile, notify } = useStudyHub();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -129,7 +131,7 @@ function AssignmentDialog({
         body,
       );
       setFileKey((value) => value + 1);
-      notify('Работа отправлена.');
+      notify(t('Работа отправлена.'));
     } catch (failure) {
       setError(messageOf(failure));
     } finally {
@@ -139,17 +141,17 @@ function AssignmentDialog({
   return (
     <Modal title={assignment.title} onClose={onClose}>
       <Badge kind={submission?.status === 'revision' ? 'amber' : ''}>
-        {statusNames[assignmentStatus(submission)]}
+        {t(statusNames[assignmentStatus(submission)])}
       </Badge>
       <p className="muted mt">
         {data.subjects.find((item) => item.id === assignment.subjectId)?.name} ·{' '}
         {data.groups.find((item) => item.id === assignment.groupId)?.name}
       </p>
       <p className="mt">
-        Срок: {formatDate(assignment.dueAt)}, {formatTime(assignment.dueAt)}
+        {t('Срок:')} {formatDate(assignment.dueAt, locale)}, {formatTime(assignment.dueAt)}
       </p>
       <section className="drawer-section">
-        <h3>Что нужно сделать</h3>
+        <h3>{t('Что нужно сделать')}</h3>
         <p className="preserve-lines">{assignment.description}</p>
         {assignment.steps.length > 0 && (
           <ol>
@@ -161,13 +163,13 @@ function AssignmentDialog({
       </section>
       {submission && (
         <section className="drawer-section">
-          <h3>Отправленная работа</h3>
+          <h3>{t('Отправленная работа')}</h3>
           <button
             type="button"
             className="button"
             onClick={() =>
               void downloadFile(submission.file.id, submission.file.name).catch((failure) =>
-                notify(messageOf(failure)),
+                notify(t(messageOf(failure))),
               )
             }
           >
@@ -175,22 +177,22 @@ function AssignmentDialog({
             {submission.file.name}
           </button>
           <p className="muted small mt">
-            {formatDate(submission.submittedAt)}, {formatTime(submission.submittedAt)}
+            {formatDate(submission.submittedAt, locale)}, {formatTime(submission.submittedAt)}
           </p>
         </section>
       )}
       {submission && ['reviewed', 'revision'].includes(submission.status) && (
         <section className="feedback drawer-section">
           <div className="flex between">
-            <h3>Обратная связь</h3>
+            <h3>{t('Обратная связь')}</h3>
             {submission.grade !== null && <span className="grade">{submission.grade}</span>}
           </div>
-          <p className="preserve-lines">{submission.comment || 'Без комментария'}</p>
+          <p className="preserve-lines">{submission.comment || t('Без комментария')}</p>
         </section>
       )}
       {submission?.status !== 'reviewed' && (
         <form onSubmit={submit} aria-busy={busy}>
-          <Field label={submission ? 'Заменить файл' : 'Ваша работа'}>
+          <Field label={submission ? t('Заменить файл') : t('Ваша работа')}>
             <input
               key={fileKey}
               type="file"
@@ -202,13 +204,13 @@ function AssignmentDialog({
             />
           </Field>
           <p id="submission-file-hint" className="small muted">
-            PDF, DOCX, ZIP, SQL, TXT или изображение · до 3 МБ
+            {t('PDF, DOCX, ZIP, SQL, TXT или изображение · до 3 МБ')}{' '}
           </p>
           <p id="submission-file-error" className="form-error error-text" role="alert">
-            {error}
+            {t(error)}
           </p>
           <button className="button primary full mt" type="submit" disabled={busy}>
-            {busy ? 'Отправляем…' : submission ? 'Отправить повторно' : 'Сдать работу'}
+            {busy ? t('Отправляем…') : submission ? t('Отправить повторно') : t('Сдать работу')}
           </button>
         </form>
       )}
@@ -217,6 +219,7 @@ function AssignmentDialog({
 }
 
 export function StudentToday() {
+  const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const today = dateKey(new Date(now));
@@ -246,14 +249,16 @@ export function StudentToday() {
   return (
     <>
       <PageHeading
-        title={`С возвращением, ${user?.name.split(' ')[0] || 'студент'}!`}
-        description={formatDate(today)}
+        title={t('С возвращением, {value0}!', {
+          value0: String(user?.name.split(' ')[0] || t('студент')),
+        })}
+        description={formatDate(today, locale)}
       />
       <div className="teacher-stats">
         {[
-          [lessons.length, 'Занятий сегодня', 'calendar'],
-          [tasks.length, 'Заданий к выполнению', 'tasks'],
-          [data.subjects.length, 'Учебных предметов', 'users'],
+          [lessons.length, t('Занятий сегодня'), 'calendar'],
+          [tasks.length, t('Заданий к выполнению'), 'tasks'],
+          [data.subjects.length, t('Учебных предметов'), 'users'],
         ].map(([count, label, icon]) => (
           <div className="teacher-stat" key={String(label)}>
             <span className="stat-icon">
@@ -270,9 +275,9 @@ export function StudentToday() {
         <div className="main-column">
           <section>
             <div className="section-head">
-              <h2>Сегодня на парах</h2>
+              <h2>{t('Сегодня на парах')}</h2>
               <Link href="/schedule" className="button small">
-                Всё расписание
+                {t('Всё расписание')}{' '}
               </Link>
             </div>
             {lessons.length ? (
@@ -297,12 +302,12 @@ export function StudentToday() {
                           {data.users.find((item) => item.id === lesson.teacherId)?.name}
                         </p>
                         <small>
-                          {data.groups.find((item) => item.id === lesson.groupId)?.name} · Ауд.{' '}
-                          {data.rooms.find((item) => item.id === lesson.roomId)?.name}
+                          {data.groups.find((item) => item.id === lesson.groupId)?.name}{' '}
+                          {t('· Ауд.')} {data.rooms.find((item) => item.id === lesson.roomId)?.name}
                         </small>
                       </div>
                       <Badge kind={status === 'current' ? '' : 'neutral'}>
-                        {statusNames[status]}
+                        {t(statusNames[status])}
                       </Badge>
                     </div>
                   );
@@ -311,17 +316,17 @@ export function StudentToday() {
             ) : (
               <div className="card">
                 <EmptyState
-                  title="На сегодня занятий нет"
-                  description="Опубликованные занятия можно посмотреть в расписании."
+                  title={t('На сегодня занятий нет')}
+                  description={t('Опубликованные занятия можно посмотреть в расписании.')}
                 />
               </div>
             )}
           </section>
           <section>
             <div className="section-head">
-              <h2>Ближайшие задания</h2>
+              <h2>{t('Ближайшие задания')}</h2>
               <Link href="/tasks" className="button small">
-                Все задания
+                {t('Все задания')}{' '}
               </Link>
             </div>
             <AssignmentCards assignments={tasks.slice(0, 3)} onOpen={setSelectedId} />
@@ -343,6 +348,7 @@ export function StudentToday() {
 }
 
 export function TasksPage() {
+  const { t } = useI18n();
   const { data, user } = useStudyHub();
   const [status, setStatus] = useState('all');
   const [query, setQuery] = useState('');
@@ -365,11 +371,11 @@ export function TasksPage() {
   return (
     <>
       <PageHeading
-        title="Мои задания"
-        description="От первого шага до обратной связи преподавателя."
+        title={t('Мои задания')}
+        description={t('От первого шага до обратной связи преподавателя.')}
       />
       <div className="publication-toolbar">
-        <div className="tabs" role="group" aria-label="Статус задания">
+        <div className="tabs" role="group" aria-label={t('Статус задания')}>
           {statuses.map((item) => (
             <button
               type="button"
@@ -378,7 +384,7 @@ export function TasksPage() {
               aria-pressed={item === status}
               onClick={() => setStatus(item)}
             >
-              {item === 'all' ? 'Все' : statusNames[item]}
+              {item === 'all' ? t('Все') : t(statusNames[item])}
             </button>
           ))}
         </div>
@@ -387,19 +393,19 @@ export function TasksPage() {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Найти задание…"
-          aria-label="Поиск задания"
+          placeholder={t('Найти задание…')}
+          aria-label={t('Поиск задания')}
         />
       </div>
       {assignments.length ? (
         <AssignmentCards assignments={assignments} onOpen={setSelectedId} />
       ) : (
         <EmptyState
-          title={query || status !== 'all' ? 'Задания не найдены' : 'Заданий пока нет'}
+          title={query || status !== 'all' ? t('Задания не найдены') : t('Заданий пока нет')}
           description={
             query || status !== 'all'
-              ? 'Измените поисковый запрос или выбранный статус.'
-              : 'Новые задания появятся после публикации преподавателем.'
+              ? t('Измените поисковый запрос или выбранный статус.')
+              : t('Новые задания появятся после публикации преподавателем.')
           }
         />
       )}
@@ -419,13 +425,14 @@ function subjectGrades(data: Bootstrap, studentId: string | undefined, subjectId
     const lesson = data.lessons.find(
       (item) => item.id === grade.lessonId && item.subjectId === subjectId,
     );
-    return lesson && grade.studentId === studentId && grade.grade !== null
+    return lesson && grade.studentId === studentId && grade.status !== 'unmarked'
       ? [
           {
             id: `lesson-${lesson.id}`,
             title: lesson.kind,
             date: lesson.startsAt,
-            grade: grade.grade,
+            grade: numericGrade(grade),
+            label: String(gradeLabel(grade)),
             comment: '',
           },
         ]
@@ -445,6 +452,7 @@ function subjectGrades(data: Bootstrap, studentId: string | undefined, subjectId
             title: assignment.title,
             date: submission.submittedAt,
             grade: submission.grade,
+            label: String(submission.grade),
             comment: submission.comment,
           },
         ]
@@ -454,14 +462,15 @@ function subjectGrades(data: Bootstrap, studentId: string | undefined, subjectId
 }
 
 export function SubjectsPage() {
+  const { t, locale } = useI18n();
   const { data, user, downloadFile, notify } = useStudyHub();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'grades' | 'attendance' | 'materials'>('grades');
+  const [tab, setTab] = useState<'grades' | 'materials'>('grades');
   const subject = data.subjects.find((item) => item.id === selectedId);
   if (!subject)
     return (
       <>
-        <PageHeading title="Мои предметы" description="Оценки, посещаемость и материалы." />
+        <PageHeading title={t('Мои предметы')} description={t('Оценки и учебные материалы.')} />
         {data.subjects.length ? (
           <div className="subject-grid">
             {data.subjects.map((item) => {
@@ -482,42 +491,38 @@ export function SubjectsPage() {
                     <Icon name="book" />
                   </span>
                   <h3>{item.name}</h3>
-                  <p>Средний балл: {score === null ? '—' : score.toFixed(1).replace('.', ',')}</p>
+                  <p>
+                    {t('Средний балл:')}{' '}
+                    {score === null
+                      ? '—'
+                      : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(score)}
+                  </p>
                 </button>
               );
             })}
           </div>
         ) : (
           <EmptyState
-            title="Предметов пока нет"
-            description="Они появятся после назначения вашей группе."
+            title={t('Предметов пока нет')}
+            description={t('Они появятся после назначения вашей группе.')}
           />
         )}
       </>
     );
   const grades = subjectGrades(data, user?.id, subject.id);
-  const attendance = data.attendance
-    .flatMap((entry) => {
-      const lesson = data.lessons.find(
-        (item) => item.id === entry.lessonId && item.subjectId === subject.id,
-      );
-      return entry.studentId === user?.id && lesson ? [{ ...entry, lesson }] : [];
-    })
-    .sort((a, b) => b.lesson.startsAt.localeCompare(a.lesson.startsAt));
   const materials = data.materials.filter((item) => item.subjectId === subject.id);
   return (
     <>
       <button type="button" className="button text-link mb" onClick={() => setSelectedId(null)}>
         <Icon name="left" className="sm" />
-        Все предметы
+        {t('Все предметы')}{' '}
       </button>
       <PageHeading title={subject.name} />
-      <div className="tabs mb" role="group" aria-label="Раздел предмета">
+      <div className="tabs mb" role="group" aria-label={t('Раздел предмета')}>
         {(
           [
-            ['grades', 'Оценки'],
-            ['attendance', 'Посещаемость'],
-            ['materials', 'Материалы'],
+            ['grades', t('Оценки')],
+            ['materials', t('Материалы')],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -537,19 +542,19 @@ export function SubjectsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Дата</th>
-                  <th>Работа / занятие</th>
-                  <th>Оценка</th>
-                  <th>Комментарий</th>
+                  <th>{t('Дата')}</th>
+                  <th>{t('Работа / занятие')}</th>
+                  <th>{t('Оценка')}</th>
+                  <th>{t('Комментарий')}</th>
                 </tr>
               </thead>
               <tbody>
                 {grades.map((grade) => (
                   <tr key={grade.id}>
-                    <td>{formatDate(grade.date)}</td>
+                    <td>{formatDate(grade.date, locale)}</td>
                     <td>{grade.title}</td>
                     <td>
-                      <span className="grade">{grade.grade}</span>
+                      <span className="grade">{t(grade.label)}</span>
                     </td>
                     <td className="preserve-lines">{grade.comment || '—'}</td>
                   </tr>
@@ -559,44 +564,8 @@ export function SubjectsPage() {
           </div>
         ) : (
           <EmptyState
-            title="Оценок пока нет"
-            description="Они появятся после проверки преподавателем."
-          />
-        ))}
-      {tab === 'attendance' &&
-        (attendance.length ? (
-          <div className="card table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Дата</th>
-                  <th>Занятие</th>
-                  <th>Отметка</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendance.map((entry) => (
-                  <tr key={entry.lessonId}>
-                    <td>{formatDate(entry.lesson.startsAt)}</td>
-                    <td>{entry.lesson.kind}</td>
-                    <td>
-                      <Badge
-                        kind={
-                          entry.status === 'absent' ? 'red' : entry.status === 'late' ? 'amber' : ''
-                        }
-                      >
-                        {attendanceLabels[entry.status]}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState
-            title="Отметок пока нет"
-            description="Преподаватель ещё не сохранил посещаемость."
+            title={t('Оценок пока нет')}
+            description={t('Они появятся после проверки преподавателем.')}
           />
         ))}
       {tab === 'materials' &&
@@ -609,7 +578,7 @@ export function SubjectsPage() {
                 key={material.id}
                 onClick={() =>
                   void downloadFile(material.fileId, material.title).catch((failure) =>
-                    notify(messageOf(failure)),
+                    notify(t(messageOf(failure))),
                   )
                 }
               >
@@ -620,8 +589,8 @@ export function SubjectsPage() {
           </div>
         ) : (
           <EmptyState
-            title="Материалов пока нет"
-            description="Преподаватель добавит их к этому предмету."
+            title={t('Материалов пока нет')}
+            description={t('Преподаватель добавит их к этому предмету.')}
           />
         ))}
     </>
@@ -629,6 +598,7 @@ export function SubjectsPage() {
 }
 
 function ProfileForm({ user }: { user: User }) {
+  const { t } = useI18n();
   const { data, mutate, notify } = useStudyHub();
   const [name, setName] = useState(user.name);
   const [busy, setBusy] = useState(false);
@@ -645,7 +615,7 @@ function ProfileForm({ user }: { user: User }) {
     setError('');
     try {
       await mutate('PATCH', '/api/profile', { name: value, version: user.version });
-      notify('Профиль сохранён.');
+      notify(t('Профиль сохранён.'));
     } catch (failure) {
       setError(messageOf(failure));
     } finally {
@@ -654,7 +624,7 @@ function ProfileForm({ user }: { user: User }) {
   }
   return (
     <form onSubmit={submit} className="card card-pad profile-form" aria-busy={busy}>
-      <Field label="Имя и фамилия">
+      <Field label={t('Имя и фамилия')}>
         <input
           name="name"
           type="text"
@@ -666,73 +636,32 @@ function ProfileForm({ user }: { user: User }) {
           autoComplete="name"
         />
       </Field>
-      <Field label="Электронная почта">
+      <Field label={t('Электронная почта')}>
         <input type="email" value={user.email} disabled />
       </Field>
       <p className="muted">
-        {roles[user.role]}
+        {t(roles[user.role])}
         {user.groupId
-          ? ` · ${data.groups.find((item) => item.id === user.groupId)?.name || 'Группа не указана'}`
+          ? ` · ${data.groups.find((item) => item.id === user.groupId)?.name || t('Группа не указана')}`
           : ''}
       </p>
       <p className="form-error error-text" role="alert">
-        {error}
+        {t(error)}
       </p>
       <button className="button primary mt" type="submit" disabled={busy}>
-        {busy ? 'Сохраняем…' : 'Сохранить'}
+        {busy ? t('Сохраняем…') : t('Сохранить')}
       </button>
     </form>
   );
 }
 
 export function ProfilePage() {
+  const { t } = useI18n();
   const { user } = useStudyHub();
   return (
     <>
-      <PageHeading title="Мой профиль" description="Данные вашего аккаунта." />
+      <PageHeading title={t('Мой профиль')} description={t('Данные вашего аккаунта.')} />
       {user && <ProfileForm key={`${user.id}-${user.version}`} user={user} />}
-    </>
-  );
-}
-
-export function AboutPage() {
-  return (
-    <>
-      <PageHeading
-        title="Учёба — в одном пространстве."
-        description="StudyHUB объединяет расписание, задания, оценки и посещаемость."
-      />
-      <div className="subject-grid">
-        {[
-          ['calendar', 'Расписание', 'Пары, преподаватели и аудитории.'],
-          ['tasks', 'Задания', 'Сроки, сдача работ и обратная связь.'],
-          ['book', 'Журнал', 'Оценки и посещаемость по занятиям.'],
-        ].map(([icon, title, description]) => (
-          <article className="card card-pad" key={title}>
-            <span className="subject-icon">
-              <Icon name={icon} />
-            </span>
-            <h2>{title}</h2>
-            <p className="muted mt">{description}</p>
-          </article>
-        ))}
-      </div>
-      <section className="card card-pad mt">
-        <h2>Команда проекта</h2>
-        <div className="team-list">
-          {[
-            ['DiasD3v', 'Frontend-разработчик'],
-            ['bta2602', 'Backend-разработчик'],
-            ['bekulanbalkashbay-dot', 'Разработчик базы данных'],
-            ['didarochKA', 'UI/UX-дизайнер и тестировщик'],
-          ].map(([name, role]) => (
-            <div key={name}>
-              <strong>{name}</strong>
-              <span>{role}</span>
-            </div>
-          ))}
-        </div>
-      </section>
     </>
   );
 }

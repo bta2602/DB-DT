@@ -66,6 +66,31 @@ export const schoolSchema = `
       CREATE INDEX IF NOT EXISTS school_lessons_room ON school_lessons(room_id, starts_at);
     `;
 
+export const submissionsSchema = `
+  CREATE TABLE IF NOT EXISTS school_submissions (
+    id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL REFERENCES school_assignments(id),
+    student_id TEXT NOT NULL REFERENCES auth_users(id), file_id TEXT NOT NULL REFERENCES school_files(id),
+    status TEXT NOT NULL CHECK(status IN ('submitted','reviewed','revision')),
+    submitted_at TEXT NOT NULL,
+    grade INTEGER CONSTRAINT school_submissions_grade_check CHECK(grade BETWEEN 0 AND 100 AND grade = CAST(grade AS INTEGER)),
+    comment TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(assignment_id, student_id)
+  );
+`;
+
+export const gradesSchema = `
+  CREATE TABLE IF NOT EXISTS school_grades (
+    lesson_id TEXT NOT NULL REFERENCES school_lessons(id), student_id TEXT NOT NULL REFERENCES auth_users(id),
+    grade INTEGER, status TEXT NOT NULL DEFAULT 'unmarked', version INTEGER NOT NULL DEFAULT 1,
+    CONSTRAINT school_grades_status_check CHECK(status IN ('graded','not_required','absent','unmarked')),
+    CONSTRAINT school_grades_grade_check CHECK(
+      (status = 'graded' AND grade IS NOT NULL AND grade BETWEEN 0 AND 100 AND grade = CAST(grade AS INTEGER))
+      OR (status <> 'graded' AND grade IS NULL)
+    ),
+    PRIMARY KEY(lesson_id, student_id)
+  );
+`;
+
 export const learningSchema = `
   CREATE TABLE IF NOT EXISTS school_files (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, mime_type TEXT NOT NULL,
@@ -77,19 +102,8 @@ export const learningSchema = `
     title TEXT NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, steps_json TEXT NOT NULL,
     due_at TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1
   );
-  CREATE TABLE IF NOT EXISTS school_submissions (
-    id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL REFERENCES school_assignments(id),
-    student_id TEXT NOT NULL REFERENCES auth_users(id), file_id TEXT NOT NULL REFERENCES school_files(id),
-    status TEXT NOT NULL CHECK(status IN ('submitted','reviewed','revision')),
-    submitted_at TEXT NOT NULL, grade INTEGER CHECK(grade IN (2,3,4,5)),
-    comment TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
-    UNIQUE(assignment_id, student_id)
-  );
-  CREATE TABLE IF NOT EXISTS school_grades (
-    lesson_id TEXT NOT NULL REFERENCES school_lessons(id), student_id TEXT NOT NULL REFERENCES auth_users(id),
-    grade INTEGER CHECK(grade IN (2,3,4,5)), version INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY(lesson_id, student_id)
-  );
+  ${submissionsSchema}
+  ${gradesSchema}
   CREATE TABLE IF NOT EXISTS school_attendance (
     lesson_id TEXT NOT NULL REFERENCES school_lessons(id), student_id TEXT NOT NULL REFERENCES auth_users(id),
     status TEXT NOT NULL CHECK(status IN ('present','absent','late','excused')),

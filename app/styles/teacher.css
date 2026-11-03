@@ -265,36 +265,80 @@
   display: block;
   margin-top: 3px;
 }
-.grade-select {
-  appearance: none;
-  width: 37px;
-  height: 36px;
-  text-align: center;
-  border: 1px solid #dbe6d3;
+.grade-cell {
+  display: inline-grid;
+  place-items: center;
+  min-width: 46px;
+  min-height: 38px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #eef5e8;
+  background: var(--soft);
   color: var(--green);
   font-size: 14px;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
-  padding: 0;
 }
-.grade-select.blank {
-  background: white;
-  border: 1px dashed #dce1d4;
-  color: #a1ab96;
-  font-size: 17px;
-  font-weight: 400;
+.grade-cell.blank,
+.grade-cell.unmarked {
+  border-style: dashed;
+  background: var(--white);
+  color: var(--muted);
 }
-.grade-select.low {
-  background: #fcf0e7;
-  border-color: #eddbc8;
-  color: #a7773e;
+.grade-cell.low,
+.grade-cell.absent {
+  color: var(--red);
 }
-.grade-select:disabled {
+.grade-cell.not_required {
+  color: var(--muted);
+}
+.grade-cell:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+.grade-cell:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  background: #f5f6f2;
+}
+.teacher-grade-table th.journal-current-column {
+  box-shadow: inset 0 -3px var(--green);
+}
+.grade-editor-dialog {
+  width: min(440px, calc(100vw - 24px));
+}
+.grade-editor-student {
+  margin-bottom: 5px;
+  color: var(--ink);
+  font-weight: 600;
+}
+.grade-status-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.grade-status-options label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.grade-status-options input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--green);
+}
+.grade-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.grade-editor-actions > :first-child {
+  margin-right: auto;
 }
 .teacher-average {
   font-size: 15px;
@@ -315,162 +359,6 @@
   display: flex;
   gap: 6px;
   align-items: center;
-}
-.teacher-subtabs {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 23px;
-}
-.teacher-subtabs .tabs {
-  width: auto;
-  min-width: 310px;
-}
-.teacher-subtabs .tabs button {
-  padding: 7px 19px;
-}
-.attendance-context {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 22px;
-  border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
-}
-.attendance-context h2 {
-  font-size: 16px;
-}
-.attendance-context p {
-  font-size: 10px;
-  margin-top: 5px;
-  color: var(--muted);
-}
-.attendance-metrics {
-  display: flex;
-  gap: 19px;
-  padding: 15px 22px;
-  border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
-}
-.attendance-metrics span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: #839078;
-}
-.attendance-metrics strong {
-  font-size: 15px;
-  font-weight: 550;
-  color: #526b48;
-}
-.attendance-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 540px;
-}
-.attendance-table th {
-  text-align: left;
-  padding: 12px 22px;
-  background: #fafbf8;
-  color: #8a9381;
-  font-size: 9px;
-  letter-spacing: 0.4px;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-.attendance-table th:last-child {
-  text-align: right;
-}
-.attendance-table td {
-  padding: 13px 22px;
-  border-bottom: 1px solid var(--line);
-}
-.attendance-table tr:last-child td {
-  border: 0;
-}
-.attendance-table td:last-child {
-  text-align: right;
-}
-.attendance-buttons {
-  display: inline-flex;
-  gap: 7px;
-}
-.attendance-buttons button {
-  width: 37px;
-  height: 33px;
-  border-radius: 7px;
-  border: 1px solid #e3e8dc;
-  font-size: 11px;
-  color: #8c9582;
-  background: #fff;
-}
-.attendance-buttons button:hover {
-  background: #f4f7ef;
-}
-.attendance-buttons button.selected.present {
-  background: #eaf3e3;
-  border-color: #abc597;
-  color: #446b38;
-}
-.attendance-buttons button.selected.absent {
-  background: #fbede7;
-  border-color: #e4bdae;
-  color: #ac6250;
-}
-.attendance-buttons button.selected.late {
-  background: #faf1dc;
-  border-color: #dfce9f;
-  color: #9a7f3b;
-}
-.attendance-buttons button.selected.excused {
-  background: #edf2f6;
-  border-color: #bfd0dc;
-  color: #597e99;
-}
-.attendance-row-status {
-  font-size: 9px;
-  color: #87917d;
-  min-width: 135px;
-}
-.attendance-savebar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  background: #f8faf4;
-  padding: 18px 22px;
-  border-top: 1px solid var(--line);
-}
-.attendance-savebar p {
-  font-size: 11px;
-  font-weight: 500;
-}
-.attendance-savebar small {
-  font-size: 9px;
-  color: #8b957f;
-  display: block;
-  margin-top: 4px;
-}
-.attendance-savebar .actions {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-}
-.attendance-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 13px;
-  font-size: 9px;
-  color: var(--muted);
-  margin-top: 15px;
-}
-.attendance-legend strong {
-  color: #6f7f65;
-  font-size: 10px;
-  margin-right: 4px;
 }
 .teacher-queue-tabs {
   margin-bottom: 20px;
@@ -667,26 +555,6 @@
   color: var(--muted);
   line-height: 1.6;
 }
-.review-grade-picker {
-  display: flex;
-  gap: 9px;
-  margin: 19px 0 21px;
-}
-.review-grade-picker button {
-  width: 49px;
-  height: 46px;
-  border: 1px solid #dce4d4;
-  border-radius: 9px;
-  background: #fff;
-  font-size: 19px;
-  font-weight: 500;
-  color: #8b997c;
-}
-.review-grade-picker button.selected {
-  background: var(--green);
-  color: white;
-  border-color: var(--green);
-}
 .review-feedback .field {
   font-size: 10px;
   margin-bottom: 12px;
@@ -849,9 +717,6 @@
   overflow: auto;
   max-width: 100%;
 }
-.teacher-lesson-selector {
-  min-width: 230px !important;
-}
 .teacher-grade-table td:focus-within {
   background: #f2f7eb;
 }
@@ -886,10 +751,6 @@
   .review-feedback {
     padding: 18px;
   }
-  .review-grade-picker button {
-    width: 44px;
-    height: 43px;
-  }
   .work-code {
     font-size: 11px;
     padding: 20px;
@@ -909,22 +770,12 @@
     max-width: none;
     width: 100%;
   }
-  .teacher-subtabs .save-state {
-    font-size: 9px;
-  }
   .review-layout {
     grid-template-columns: minmax(0, 1fr) 250px;
     gap: 15px;
   }
   .review-feedback {
     padding: 16px;
-  }
-  .review-grade-picker {
-    gap: 7px;
-  }
-  .review-grade-picker button {
-    width: 42px;
-    height: 42px;
   }
   .review-workspace-head h1 {
     font-size: 23px;
@@ -986,24 +837,6 @@
     width: 100%;
     font-size: 11px;
   }
-  .teacher-filters .field:has(.teacher-lesson-selector) {
-    grid-column: 1/-1;
-  }
-  .teacher-lesson-selector {
-    min-width: 0 !important;
-  }
-  .teacher-subtabs {
-    flex-wrap: wrap;
-    gap: 11px;
-  }
-  .teacher-subtabs .tabs {
-    min-width: 0;
-    width: 100%;
-  }
-  .teacher-subtabs .tabs button {
-    padding: 8px 14px;
-    font-size: 11px;
-  }
   .teacher-journal-head {
     padding: 17px;
     align-items: flex-start;
@@ -1035,70 +868,6 @@
   }
   .teacher-grade-table {
     min-width: 560px;
-  }
-  .attendance-context {
-    padding: 17px;
-    gap: 12px;
-  }
-  .attendance-context h2 {
-    font-size: 15px;
-  }
-  .attendance-context .button {
-    font-size: 10px;
-    min-height: 34px;
-  }
-  .attendance-metrics {
-    padding: 14px 17px;
-    gap: 12px;
-  }
-  .attendance-metrics span {
-    font-size: 9px;
-  }
-  .attendance-metrics strong {
-    font-size: 13px;
-  }
-  .attendance-table {
-    min-width: 0;
-  }
-  .attendance-table th {
-    padding: 12px 13px;
-    font-size: 8px;
-  }
-  .attendance-table td {
-    padding: 13px;
-  }
-  .attendance-table td:first-child {
-    width: 48%;
-  }
-  .attendance-table .student-cell .avatar {
-    display: none;
-  }
-  .attendance-row-status {
-    display: none;
-  }
-  .attendance-buttons {
-    gap: 4px;
-  }
-  .attendance-buttons button {
-    width: 29px;
-    height: 33px;
-    font-size: 10px;
-  }
-  .attendance-savebar {
-    padding: 17px;
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .attendance-savebar .actions {
-    justify-content: space-between;
-  }
-  .attendance-savebar .button {
-    font-size: 10px;
-    padding: 8px 12px;
-  }
-  .attendance-legend {
-    gap: 9px;
-    font-size: 8px;
   }
   .teacher-queue-tabs {
     flex-wrap: wrap;
@@ -1134,10 +903,6 @@
   .review-feedback {
     position: static;
     padding: 21px;
-  }
-  .review-grade-picker button {
-    width: 52px;
-    height: 46px;
   }
   .work-code {
     padding: 20px;

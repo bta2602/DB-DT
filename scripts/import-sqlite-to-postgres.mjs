@@ -115,6 +115,11 @@ export async function readSqliteSnapshot(filename) {
         rows: source.prepare(`SELECT ${selected} FROM ${identifier(name)}`).all(),
       };
     }
+    if (!tables.school_grades.columns.some((column) => column.name === 'status')) {
+      throw new ImportError(
+        'Сначала обновите рабочую копию SQLite текущей версией приложения до шкалы 0–100. Исходную резервную копию сохраните; порядок описан в database/README.md.',
+      );
+    }
     if (tables.studyhub_settings.rows.some((row) => row.key === markerKey)) {
       throw new ImportError('В исходной базе уже есть служебный маркер облачного переноса.');
     }

@@ -1,3 +1,4 @@
+import { journalGrades } from './journal-grades.mjs';
 export const CAMPUS_SEED_ID = 'studyhub-campus-v3';
 export const LESSON_SLOTS = [510, 610, 710, 840, 940, 1040];
 const MINUTE = 60000;
@@ -275,7 +276,7 @@ export function createCampusData(now = new Date(), existing) {
         data.grades.push({
           lessonId: lesson.id,
           studentId: student.id,
-          grade: [4, 5, 4, 3, 5, 4, 3, 5, 4, 2][(lessonIndex + index) % 10],
+          grade: [80, 100, 80, 60, 100, 80, 60, 100, 80, 40][(lessonIndex + index) % 10],
           version: 1,
         });
     });
@@ -324,7 +325,7 @@ export function createCampusData(now = new Date(), existing) {
               `work-${groupIndex + 1}-${index + 1}-${studentIndex + 1}.txt`,
               text,
             ),
-            grade: status === 'reviewed' ? [4, 5, 4, 3, 5][studentIndex % 5] : null,
+            grade: status === 'reviewed' ? [80, 100, 80, 60, 100][studentIndex % 5] : null,
             comment:
               status === 'reviewed'
                 ? 'Основная часть выполнена верно. Обратите внимание на оформление выводов.'
@@ -356,5 +357,6 @@ export function createCampusData(now = new Date(), existing) {
     body: 'На этой неделе консультации проходят после занятий. Согласуйте время с преподавателем и подготовьте работающую версию проекта.',
     publishedAt: new Date(today + 8 * 60 * MINUTE).toISOString(),
   });
+  data.grades = journalGrades(data.grades, data.attendance);
   return { seedId: CAMPUS_SEED_ID, seedDate, profiles, files, data };
 }

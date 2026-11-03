@@ -36,12 +36,19 @@ async function stopServer() {
 }
 
 async function main() {
-  if (process.argv.slice(2).join(' ') !== '--qa') {
+  const args = process.argv.slice(2);
+  const envFile = args.length === 1 ? '.env.qa' : args[2];
+  if (
+    args[0] !== '--qa' ||
+    ![1, 3].includes(args.length) ||
+    (args.length === 3 && args[1] !== '--env') ||
+    !/^\.env(?:\.[\w-]+)*$/.test(envFile)
+  ) {
     throw new Error(
-      'Opt-in only: node tests/run-postgres.mjs --qa (requires an isolated .env.qa).',
+      'Opt-in only: node tests/run-postgres.mjs --qa [--env .env.journal-qa] (requires an isolated database).',
     );
   }
-  const qa = parseEnv(await readFile(join(root, '.env.qa'), 'utf8'));
+  const qa = parseEnv(await readFile(join(root, envFile), 'utf8'));
   const production = parseEnv(await readFile(join(root, '.env.local'), 'utf8'));
   const qaUrl = new URL(qa.DATABASE_URL);
   const productionUrl = new URL(production.DATABASE_URL);

@@ -1,7 +1,10 @@
+import { pageMetadata } from '@/lib/studyhub/page-metadata';
 import { StudyHubApp } from '@/components/studyhub/studyhub-app';
 import { PeoplePage } from '@/components/studyhub/admin-pages';
 
-export const metadata = { title: 'StudyHUB · Пользователи и группы' };
+export async function generateMetadata() {
+  return pageMetadata('Пользователи и группы');
+}
 
 export default function Page() {
   return (

@@ -5,32 +5,29 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type {
   Assignment,
-  AttendanceStatus,
+  Grade,
+  GradeStatus,
   Bootstrap,
   Lesson,
   StoredFile,
   Submission,
   User,
 } from '@/lib/studyhub/api-contract';
-import { dateKey, formatDate, formatTime, lessonStatus } from '@/lib/studyhub/client-utils';
-import { useStudyHub } from './context';
+import {
+  average,
+  dateKey,
+  formatDate,
+  formatTime,
+  gradeLabel,
+  numericGrade,
+  lessonStatus,
+} from '@/lib/studyhub/client-utils';
+import { ApiError, useStudyHub } from './context';
+import { useI18n } from './preferences';
 import { useTeacherDrafts, type ReviewDraft } from './teacher-context';
 import { AnnouncementsPanel, MaterialsPanel } from './publication-panels';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading, Person } from './shared';
 
-const attendanceLabels: Record<AttendanceStatus, string> = {
-  present: 'Присутствует',
-  absent: 'Отсутствует',
-  late: 'Опоздание',
-  excused: 'Уважительная причина',
-};
-const attendanceLetters: Record<AttendanceStatus, string> = {
-  present: 'П',
-  absent: 'Н',
-  late: 'О',
-  excused: 'У',
-};
-const attendanceKeys = Object.keys(attendanceLabels) as AttendanceStatus[];
 const workLabels = {
   submitted: 'На проверке',
   reviewed: 'Проверено',
@@ -38,21 +35,12 @@ const workLabels = {
   missing: 'Не сдано',
 };
 type WorkStatus = keyof typeof workLabels;
-const gradeOptions = [2, 3, 4, 5] as const;
+
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'Не удалось сохранить изменения. Повторите попытку.';
 const title = (items: { id: string; name: string }[], id?: string | null) =>
-  items.find((item) => item.id === id)?.name || 'Не указано';
+  items.find((item) => item.id === id)?.name || '—';
 const encoded = encodeURIComponent;
-const mean = (values: (number | null | undefined)[]) => {
-  const grades = values.filter(
-    (value): value is number => value != null && [2, 3, 4, 5].includes(value),
-  );
-  return grades.length
-    ? (grades.reduce((sum, grade) => sum + grade, 0) / grades.length).toFixed(1).replace('.', ',')
-    : '—';
-};
-
 function teacherScope(data: Bootstrap, user: User | null) {
   const pairs = data.teachingAssignments.filter((pair) => pair.teacherId === user?.id);
   const owns = (item: { teacherId: string; groupId: string; subjectId: string }) =>
@@ -80,6 +68,7 @@ function teacherScope(data: Bootstrap, user: User | null) {
 }
 
 function WorkBadge({ status }: { status: WorkStatus }) {
+  const { t } = useI18n();
   return (
     <Badge
       kind={
@@ -92,12 +81,13 @@ function WorkBadge({ status }: { status: WorkStatus }) {
               : ''
       }
     >
-      {workLabels[status]}
+      {t(workLabels[status])}
     </Badge>
   );
 }
 
 function AssignmentConditions({ assignment }: { assignment: Assignment }) {
+  const { t, locale } = useI18n();
   return (
     <>
       <p style={{ whiteSpace: 'pre-wrap' }}>{assignment.description}</p>
@@ -107,7 +97,7 @@ function AssignmentConditions({ assignment }: { assignment: Assignment }) {
         ))}
       </ol>
       <p className="small muted mt">
-        Срок: {formatDate(assignment.dueAt)}, {formatTime(assignment.dueAt)}
+        {t('Срок:')} {formatDate(assignment.dueAt, locale)}, {formatTime(assignment.dueAt)}
       </p>
     </>
   );
@@ -122,11 +112,12 @@ function TeacherLesson({
   data: Bootstrap;
   current?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <article className={current ? 'teacher-lesson' : 'card card-pad'}>
       <Badge kind={current ? '' : 'neutral'}>
         {current
-          ? 'Сейчас на занятии'
+          ? t('Сейчас на занятии')
           : `${formatTime(lesson.startsAt)}–${formatTime(lesson.endsAt)}`}
       </Badge>
       <h2>{title(data.subjects, lesson.subjectId)}</h2>
@@ -137,17 +128,15 @@ function TeacherLesson({
         <Icon name="pin" className="sm" /> {title(data.rooms, lesson.roomId)} ·{' '}
         {formatTime(lesson.startsAt)}–{formatTime(lesson.endsAt)}
       </p>
-      <Link
-        className="button primary small mt"
-        href={`/journal?lesson=${encoded(lesson.id)}&tab=attendance`}
-      >
-        Открыть журнал <Icon name="arrow" className="sm" />
+      <Link className="button primary small mt" href={`/journal?lesson=${encoded(lesson.id)}`}>
+        {t('Открыть журнал')} <Icon name="arrow" className="sm" />
       </Link>
     </article>
   );
 }
 
 export function TeacherToday() {
+  const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
   const scope = teacherScope(data, user);
   const lessons = scope.lessons
@@ -159,19 +148,23 @@ export function TeacherToday() {
   return (
     <>
       <PageHeading
-        title={`Добрый день, ${user?.name.split(' ')[0] || 'преподаватель'}.`}
-        description={`${formatDate(new Date(now).toISOString())} · занятия, журнал и работы студентов.`}
+        title={t('Добрый день, {value0}.', {
+          value0: String(user?.name.split(' ')[0] || t('преподаватель')),
+        })}
+        description={t('{value0} · занятия, журнал и работы студентов.', {
+          value0: String(formatDate(new Date(now).toISOString(), locale)),
+        })}
         action={
           <Link className="button primary" href="/assignments">
-            <Icon name="plus" className="sm" /> Создать задание
+            <Icon name="plus" className="sm" /> {t('Создать задание')}{' '}
           </Link>
         }
       />
       <div className="teacher-stats">
         {[
-          ['calendar', lessons.length, 'Занятий сегодня'],
-          ['tasks', pending, 'Работ на проверке'],
-          ['users', scope.groups.length, 'Учебных групп'],
+          ['calendar', lessons.length, t('Занятий сегодня')],
+          ['tasks', pending, t('Работ на проверке')],
+          ['users', scope.groups.length, t('Учебных групп')],
         ].map(([icon, count, label]) => (
           <div className="teacher-stat" key={String(label)}>
             <span className="stat-icon">
@@ -190,20 +183,25 @@ export function TeacherToday() {
         ) : (
           <section className="card card-pad">
             <EmptyState
-              title="На сегодня занятия завершены"
-              description="Расписание следующих дней доступно в календаре."
+              title={t('На сегодня занятия завершены')}
+              description={t('Расписание следующих дней доступно в календаре.')}
             />
             <Link href="/schedule" className="button small">
-              Расписание
+              {t('Расписание')}{' '}
             </Link>
           </section>
         )}
         <section className="card card-pad">
-          <h2>Быстрые действия</h2>
+          <h2>{t('Быстрые действия')}</h2>
           {[
-            ['/journal', 'book', 'Журнал группы', 'Оценки и посещаемость по занятиям'],
-            ['/review', 'tasks', 'Проверка работ', `${pending} работ ждут обратной связи`],
-            ['/assignments', 'file', 'Мои задания', 'Условия, сроки и прогресс группы'],
+            ['/journal', 'book', t('Журнал группы'), t('Оценки и отметки по занятиям')],
+            [
+              '/review',
+              'tasks',
+              t('Проверка работ'),
+              t('{value0} работ ждут обратной связи', { value0: String(pending) }),
+            ],
+            ['/assignments', 'file', t('Мои задания'), t('Условия, сроки и прогресс группы')],
           ].map(([href, icon, label, description]) => (
             <Link className="teacher-shortcut" key={href} href={href}>
               <span className="stat-icon">
@@ -219,9 +217,9 @@ export function TeacherToday() {
         </section>
       </div>
       <div className="teacher-section-head">
-        <h2>Занятия сегодня</h2>
+        <h2>{t('Занятия сегодня')}</h2>
         <Link className="text-link" href="/schedule">
-          Всё расписание <Icon name="arrow" className="sm" />
+          {t('Всё расписание')} <Icon name="arrow" className="sm" />
         </Link>
       </div>
       <div className="stack">
@@ -236,8 +234,8 @@ export function TeacherToday() {
           ))
         ) : (
           <EmptyState
-            title="Сегодня занятий нет"
-            description="Можно проверить работы или подготовить задания."
+            title={t('Сегодня занятий нет')}
+            description={t('Можно проверить работы или подготовить задания.')}
           />
         )}
       </div>
@@ -249,21 +247,147 @@ export function TeacherToday() {
 export function JournalPage() {
   const params = useSearchParams();
   const lessonId = params.get('lesson') || '';
-  const tab = params.get('tab') || '';
+  // Old ?tab=attendance links now open this same journal.
+  return <JournalContent key={lessonId} requestedLessonId={lessonId} />;
+}
+
+function GradeEditor({
+  lesson,
+  student,
+  record,
+  onClose,
+}: {
+  lesson: Lesson;
+  student: User;
+  record?: Grade;
+  onClose: () => void;
+}) {
+  const { t, locale } = useI18n();
+  const { mutate, notify } = useStudyHub();
+  const [value, setValue] = useState(record?.status === 'graded' ? String(record.grade) : '');
+  const [status, setStatus] = useState<GradeStatus>(record?.status || 'unmarked');
+  const [version] = useState(record?.version ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const locked = useRef(false);
+  const valid =
+    status !== 'graded' ||
+    (value.trim() !== '' &&
+      Number.isInteger(Number(value)) &&
+      Number(value) >= 0 &&
+      Number(value) <= 100);
+  async function save(nextStatus = status) {
+    if (locked.current) return;
+    if (nextStatus === 'graded' && !valid) {
+      setError('Введите целое число от 0 до 100.');
+      return;
+    }
+    locked.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      await mutate('PUT', `/api/lessons/${encoded(lesson.id)}/grades/${encoded(student.id)}`, {
+        grade: nextStatus === 'graded' ? Number(value) : null,
+        status: nextStatus,
+        version,
+      });
+      notify(t('Отметка сохранена.'));
+      onClose();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
+  }
   return (
-    <JournalContent key={`${lessonId}:${tab}`} requestedLessonId={lessonId} initialTab={tab} />
+    <Modal
+      title={t('Оценка за занятие')}
+      className="grade-editor-dialog"
+      onClose={onClose}
+      closeDisabled={busy}
+    >
+      <p className="grade-editor-student">{student.name}</p>
+      <p className="small muted mb">
+        {formatDate(lesson.startsAt, locale)} · {formatTime(lesson.startsAt)} · {lesson.kind}
+      </p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+        aria-busy={busy}
+      >
+        <Field label={t('Баллы от 0 до 100')}>
+          <input
+            autoFocus
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={100}
+            step={1}
+            aria-label={t('Баллы от 0 до 100')}
+            value={value}
+            disabled={busy || status === 'absent' || status === 'not_required'}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setStatus(event.target.value === '' ? 'unmarked' : 'graded');
+              setError('');
+            }}
+          />
+        </Field>
+        <div className="grade-status-options" role="group" aria-label={t('Особая отметка')}>
+          {(
+            [
+              ['not_required', t('н.п. — оценка не предусмотрена')],
+              ['absent', t('Н — отсутствие')],
+            ] as const
+          ).map(([option, label]) => (
+            <label key={option}>
+              <input
+                type="checkbox"
+                checked={status === option}
+                disabled={busy}
+                onChange={(event) => {
+                  setStatus(event.target.checked ? option : 'unmarked');
+                  setValue('');
+                  setError('');
+                }}
+              />
+              <span>{t(label)}</span>
+            </label>
+          ))}
+        </div>
+        <p className="small muted mt">
+          {t('Н и н.п. не учитываются в среднем балле. Ноль — полноценная оценка.')}
+        </p>
+        <p className="form-error error-text" role="alert">
+          {t(error)}
+        </p>
+        <div className="grade-editor-actions">
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            onClick={() => void save('unmarked')}
+          >
+            {t('Очистить')}
+          </button>
+          <button type="button" className="button" disabled={busy} onClick={onClose}>
+            {t('Отмена')}
+          </button>
+          <button type="submit" className="button primary" disabled={busy || !valid}>
+            {busy ? t('Сохранение…') : t('Сохранить')}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
-function JournalContent({
-  requestedLessonId,
-  initialTab,
-}: {
-  requestedLessonId: string;
-  initialTab: string;
-}) {
-  const { data, user, mutate, notify, now } = useStudyHub();
-  const drafts = useTeacherDrafts();
+function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
+  const { t, locale } = useI18n();
+  const { data, user, now } = useStudyHub();
   const scope = teacherScope(data, user);
   const requestedLesson = scope.lessons.find((lesson) => lesson.id === requestedLessonId);
   const [selectedGroup, setSelectedGroup] = useState(requestedLesson?.groupId || '');
@@ -275,30 +399,21 @@ function JournalContent({
   const subjectId = subjects.some((subject) => subject.id === selectedSubject)
     ? selectedSubject
     : subjects[0]?.id || '';
-  const lessons = scope.lessons
-    .filter((lesson) => lesson.groupId === groupId && lesson.subjectId === subjectId)
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  const [selectedLesson, setSelectedLesson] = useState(requestedLesson?.id || '');
-  const lesson =
-    lessons.find((item) => item.id === selectedLesson) ||
-    lessons.filter((item) => Date.parse(item.startsAt) <= now).at(-1) ||
-    lessons[0];
-  const [tab, setTab] = useState(initialTab === 'attendance' ? 'attendance' : 'grades');
   const [query, setQuery] = useState('');
-  const [busy, setBusy] = useState(false);
-  const locked = useRef(false);
-  const [error, setError] = useState('');
+  const [editing, setEditing] = useState<{ lessonId: string; studentId: string } | null>(null);
   const students = scope.roster(groupId);
   const visibleStudents = students.filter((student) =>
-    student.name.toLocaleLowerCase('ru').includes(query.trim().toLocaleLowerCase('ru')),
+    student.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
   );
   const columns = [
-    ...lessons.map((item) => ({
-      kind: 'lesson' as const,
-      id: item.id,
-      date: item.startsAt,
-      label: item.kind,
-    })),
+    ...scope.lessons
+      .filter((item) => item.groupId === groupId && item.subjectId === subjectId)
+      .map((item) => ({
+        kind: 'lesson' as const,
+        id: item.id,
+        date: item.startsAt,
+        label: item.kind,
+      })),
     ...scope.assignments
       .filter((item) => item.groupId === groupId && item.subjectId === subjectId)
       .map((item) => ({
@@ -308,132 +423,42 @@ function JournalContent({
         label: item.title,
       })),
   ].sort((a, b) => a.date.localeCompare(b.date));
-  const gradeFor = (column: (typeof columns)[number], studentId: string) =>
-    column.kind === 'lesson'
-      ? data.grades.find((grade) => grade.lessonId === column.id && grade.studentId === studentId)
-          ?.grade
-      : data.submissions.find(
-          (work) =>
-            work.assignmentId === column.id &&
-            work.studentId === studentId &&
-            work.status === 'reviewed',
-        )?.grade;
-  const committed: Record<string, AttendanceStatus | null> = Object.fromEntries(
-    data.attendance
-      .filter((item) => item.lessonId === lesson?.id)
-      .map((item) => [item.studentId, item.status]),
+  const grades = new Map(
+    data.grades.map((grade) => [`${grade.lessonId}:${grade.studentId}`, grade]),
   );
-  const draft = lesson && drafts.attendance[lesson.id];
-  const entries = draft?.entries || committed;
-  const attendanceVersion = draft?.version ?? lesson?.attendanceVersion ?? 0;
-  const dirty = students.some(
-    (student) => (entries[student.id] || null) !== (committed[student.id] || null),
+  const works = new Map(
+    data.submissions.map((work) => [`${work.assignmentId}:${work.studentId}`, work]),
   );
-  const future = !lesson || Date.parse(lesson.startsAt) > now;
-
-  async function saveGrade(lessonId: string, studentId: string, value: string) {
-    if (locked.current) return;
-    locked.current = true;
-    setBusy(true);
-    setError('');
-    const record = data.grades.find(
-      (grade) => grade.lessonId === lessonId && grade.studentId === studentId,
-    );
-    try {
-      await mutate('PUT', `/api/lessons/${encoded(lessonId)}/grades/${encoded(studentId)}`, {
-        grade: value === '' ? null : Number(value),
-        version: record?.version ?? null,
-      });
-      notify('Оценка сохранена.');
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      locked.current = false;
-      setBusy(false);
-    }
-  }
-
-  function changeAttendance(next: Record<string, AttendanceStatus | null>) {
-    if (!lesson || busy || future) return;
-    const changed = students.some(
-      (student) => (next[student.id] || null) !== (committed[student.id] || null),
-    );
-    drafts.setAttendance(lesson.id, changed ? { entries: next, version: attendanceVersion } : null);
-    setError('');
-  }
-
-  async function saveAttendance() {
-    if (!lesson || locked.current || future || !dirty) return;
-    locked.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      await mutate('PUT', `/api/lessons/${encoded(lesson.id)}/attendance`, {
-        entries: students.map((student) => ({
-          studentId: student.id,
-          status: entries[student.id] || null,
-        })),
-        version: attendanceVersion,
-      });
-      drafts.setAttendance(lesson.id, null);
-      notify('Посещаемость сохранена.');
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      locked.current = false;
-      setBusy(false);
-    }
-  }
-
+  const scoreFor = (column: (typeof columns)[number], studentId: string) => {
+    if (column.kind === 'lesson') return numericGrade(grades.get(`${column.id}:${studentId}`));
+    const work = works.get(`${column.id}:${studentId}`);
+    return work?.status === 'reviewed' ? work.grade : null;
+  };
+  const editingLesson = scope.lessons.find((lesson) => lesson.id === editing?.lessonId);
+  const editingStudent = students.find((student) => student.id === editing?.studentId);
   return (
     <>
-      <PageHeading title="Журнал группы" description="Оценки и посещаемость по занятиям." />
+      <PageHeading
+        title={t('Журнал группы')}
+        description={t('Оценки и отметки в одной таблице.')}
+      />
       {!scope.groups.length ? (
         <EmptyState
-          title="Группы ещё не назначены"
-          description="Журнал появится после назначения группы и предмета администратором."
+          title={t('Группы ещё не назначены')}
+          description={t('Журнал появится после назначения группы и предмета администратором.')}
         />
       ) : (
         <>
-          <div className="teacher-subtabs">
-            <div className="tabs" role="group" aria-label="Раздел журнала">
-              {[
-                ['grades', 'Оценки'],
-                ['attendance', 'Посещаемость'],
-              ].map(([value, label]) => (
-                <button
-                  type="button"
-                  aria-pressed={tab === value}
-                  className={tab === value ? 'active' : ''}
-                  key={value}
-                  onClick={() => {
-                    setTab(value);
-                    setError('');
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <span className="save-state">
-              {tab === 'grades'
-                ? 'Оценки сохраняются после выбора'
-                : 'Отметки сохраняются по кнопке'}
-            </span>
-          </div>
           <div className="teacher-toolbar">
             <div className="teacher-filters">
-              <Field label="Учебная группа">
+              <Field label={t('Учебная группа')}>
                 <select
-                  aria-label="Группа журнала"
+                  aria-label={t('Группа журнала')}
                   value={groupId}
-                  disabled={busy}
                   onChange={(event) => {
                     setSelectedGroup(event.target.value);
                     setSelectedSubject('');
-                    setSelectedLesson('');
                     setQuery('');
-                    setError('');
                   }}
                 >
                   {scope.groups.map((group) => (
@@ -443,16 +468,11 @@ function JournalContent({
                   ))}
                 </select>
               </Field>
-              <Field label="Предмет">
+              <Field label={t('Предмет')}>
                 <select
-                  aria-label="Предмет журнала"
+                  aria-label={t('Предмет журнала')}
                   value={subjectId}
-                  disabled={busy}
-                  onChange={(event) => {
-                    setSelectedSubject(event.target.value);
-                    setSelectedLesson('');
-                    setError('');
-                  }}
+                  onChange={(event) => setSelectedSubject(event.target.value)}
                 >
                   {subjects.map((subject) => (
                     <option key={subject.id} value={subject.id}>
@@ -461,321 +481,162 @@ function JournalContent({
                   ))}
                 </select>
               </Field>
-              {tab === 'attendance' && (
-                <Field label="Занятие">
-                  <select
-                    className="teacher-lesson-selector"
-                    aria-label="Занятие для посещаемости"
-                    value={lesson?.id || ''}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setSelectedLesson(event.target.value);
-                      setError('');
-                    }}
-                  >
-                    {!lessons.length && <option value="">Нет занятий</option>}
-                    {lessons.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {formatDate(item.startsAt)} · {formatTime(item.startsAt)}–
-                        {formatTime(item.endsAt)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
             </div>
-            <div className="search-field">
+            <label className="search-field">
               <Icon name="search" className="sm" />
               <input
-                type="search"
-                aria-label="Найти студента в журнале"
-                placeholder="Найти студента…"
+                aria-label={t('Поиск студента')}
+                placeholder={t('Поиск студента…')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
-            </div>
+            </label>
           </div>
-          {error && (
-            <p className="publication-error" role="alert">
-              {error}
-            </p>
-          )}
-          {tab === 'grades' ? (
-            <>
-              {!columns.length ? (
-                <EmptyState
-                  title="Нет занятий или заданий"
-                  description="Они появятся после добавления в расписание или создания задания."
-                />
-              ) : (
-                <section className="card">
-                  <div className="teacher-journal-head">
-                    <div>
-                      <h2>
-                        {title(data.subjects, subjectId)} · {title(data.groups, groupId)}
-                      </h2>
-                      <p>Шкала 2–5 · «—» означает отсутствие оценки</p>
-                    </div>
-                  </div>
-                  <div className="teacher-table-wrap">
-                    <table className="teacher-grade-table">
-                      <thead>
-                        <tr>
-                          <th>Студент</th>
-                          {columns.map((column) => (
-                            <th key={`${column.kind}-${column.id}`}>
-                              <strong>{formatDate(column.date)}</strong>
-                              <small>
-                                {column.label}
-                                {column.kind === 'lesson' && Date.parse(column.date) > now && (
-                                  <>
-                                    <br />
-                                    Будущее занятие
-                                  </>
-                                )}
-                              </small>
-                            </th>
-                          ))}
-                          <th>
-                            Средний
-                            <br />
-                            балл
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleStudents.map((student) => (
-                          <tr key={student.id}>
-                            <td>
-                              <Person user={student} />
-                            </td>
-                            {columns.map((column) => {
-                              const grade = gradeFor(column, student.id);
-                              const work =
-                                column.kind === 'assignment'
-                                  ? data.submissions.find(
-                                      (item) =>
-                                        item.assignmentId === column.id &&
-                                        item.studentId === student.id,
-                                    )
-                                  : undefined;
-                              return (
-                                <td key={`${column.kind}-${column.id}`}>
-                                  {column.kind === 'assignment' ? (
-                                    work ? (
-                                      <Link
-                                        className={`grade-select ${grade == null ? 'blank' : ''}`}
-                                        style={{ display: 'inline-grid', placeItems: 'center' }}
-                                        href={`/review?work=${encoded(work.id)}`}
-                                        aria-label={`Работа: ${student.name}, ${column.label}`}
-                                      >
-                                        {grade ?? '—'}
-                                      </Link>
-                                    ) : (
-                                      <span className="teacher-empty-cell">—</span>
-                                    )
-                                  ) : (
-                                    <select
-                                      className={`grade-select ${grade == null ? 'blank' : grade < 4 ? 'low' : ''}`}
-                                      aria-label={`Оценка: ${student.name}, ${formatDate(column.date)}, ${formatTime(column.date)}, ${column.label}`}
-                                      disabled={busy || Date.parse(column.date) > now}
-                                      value={grade ?? ''}
-                                      onChange={(event) =>
-                                        void saveGrade(column.id, student.id, event.target.value)
-                                      }
-                                    >
-                                      <option value="">—</option>
-                                      {[5, 4, 3, 2].map((value) => (
-                                        <option key={value} value={value}>
-                                          {value}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  )}
-                                </td>
-                              );
-                            })}
-                            <td>
-                              <span className="teacher-average">
-                                {mean(columns.map((column) => gradeFor(column, student.id)))}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                        {!visibleStudents.length && (
-                          <tr>
-                            <td colSpan={columns.length + 2}>
-                              <EmptyState
-                                title="Студентов не найдено"
-                                description="Измените поиск или выберите другую группу."
-                              />
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              )}
-              <p className="journal-help">
-                Выберите оценку за занятие. Чтобы проверить задание, откройте его ячейку.
-              </p>
-            </>
-          ) : !lesson ? (
+          {!columns.length ? (
             <EmptyState
-              title="Занятий пока нет"
-              description="Выберите другую группу или предмет."
+              title={t('Нет занятий или заданий')}
+              description={t('Они появятся после добавления в расписание или создания задания.')}
             />
           ) : (
-            <>
-              <section className="card">
-                <div className="attendance-context">
-                  <div>
-                    <h2>
-                      {title(data.groups, groupId)} · {formatDate(lesson.startsAt)}
-                    </h2>
-                    <p>
-                      {formatTime(lesson.startsAt)}–{formatTime(lesson.endsAt)} ·{' '}
-                      {title(data.rooms, lesson.roomId)} · {lesson.kind}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="button soft small"
-                    disabled={
-                      busy || future || !visibleStudents.some((student) => !entries[student.id])
-                    }
-                    onClick={() => {
-                      const next = { ...entries };
-                      visibleStudents.forEach((student) => {
-                        if (!next[student.id]) next[student.id] = 'present';
-                      });
-                      changeAttendance(next);
-                    }}
-                  >
-                    {query ? 'Неотмеченные из поиска' : 'Остальные присутствуют'}
-                  </button>
+            <section className="card">
+              <div className="teacher-journal-head">
+                <div>
+                  <h2>
+                    {title(data.subjects, subjectId)} · {title(data.groups, groupId)}
+                  </h2>
+                  <p>
+                    {t(
+                      'Шкала 0–100 · Н — отсутствие · н.п. — оценка не предусмотрена · «—» — нет отметки',
+                    )}
+                  </p>
                 </div>
-                <div className="attendance-metrics">
-                  {attendanceKeys.map((key) => (
-                    <span key={key}>
-                      <strong>
-                        {students.filter((student) => entries[student.id] === key).length}
-                      </strong>
-                      {attendanceLabels[key]}
-                    </span>
-                  ))}
-                  <span>
-                    <strong>{students.filter((student) => !entries[student.id]).length}</strong>Не
-                    отмечены
-                  </span>
-                </div>
-                <div className="teacher-table-wrap">
-                  <table className="attendance-table">
-                    <thead>
-                      <tr>
-                        <th>Студент</th>
-                        <th className="attendance-row-status">Отметка</th>
-                        <th>П · Н · О · У</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleStudents.map((student) => (
+              </div>
+              <div className="teacher-table-wrap">
+                <table className="teacher-grade-table">
+                  <thead>
+                    <tr>
+                      <th>{t('Студент')}</th>
+                      {columns.map((column) => (
+                        <th
+                          key={`${column.kind}-${column.id}`}
+                          className={
+                            column.id === requestedLessonId ? 'journal-current-column' : ''
+                          }
+                        >
+                          <strong>{formatDate(column.date, locale)}</strong>
+                          <small>
+                            {column.label}
+                            {column.kind === 'lesson' && Date.parse(column.date) > now && (
+                              <>
+                                <br />
+                                {t('Будущее занятие')}
+                              </>
+                            )}
+                          </small>
+                        </th>
+                      ))}
+                      <th>{t('Средний балл')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleStudents.map((student) => {
+                      const score = average(columns.map((column) => scoreFor(column, student.id)));
+                      return (
                         <tr key={student.id}>
                           <td>
                             <Person user={student} />
                           </td>
-                          <td className="attendance-row-status">
-                            {entries[student.id]
-                              ? attendanceLabels[entries[student.id]!]
-                              : 'Не отмечен'}
-                          </td>
+                          {columns.map((column) => {
+                            const record = grades.get(`${column.id}:${student.id}`);
+                            const work = works.get(`${column.id}:${student.id}`);
+                            const score = scoreFor(column, student.id);
+                            return (
+                              <td key={`${column.kind}-${column.id}`}>
+                                {column.kind === 'assignment' ? (
+                                  work ? (
+                                    <Link
+                                      className={`grade-cell ${score == null ? 'blank' : score < 50 ? 'low' : ''}`}
+                                      href={`/review?work=${encoded(work.id)}`}
+                                      aria-label={t('Работа: {name}, {title}', {
+                                        name: student.name,
+                                        title: column.label,
+                                      })}
+                                    >
+                                      {score ?? '—'}
+                                    </Link>
+                                  ) : (
+                                    <span className="teacher-empty-cell">—</span>
+                                  )
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className={`grade-cell ${record?.status || 'unmarked'} ${score != null && score < 50 ? 'low' : ''}`}
+                                    aria-label={t('Оценка: {name}, {date}, {time}, {title}', {
+                                      name: student.name,
+                                      date: formatDate(column.date, locale),
+                                      time: formatTime(column.date),
+                                      title: column.label,
+                                    })}
+                                    aria-haspopup="dialog"
+                                    disabled={Date.parse(column.date) > now}
+                                    onClick={() =>
+                                      setEditing({ lessonId: column.id, studentId: student.id })
+                                    }
+                                  >
+                                    {t(String(gradeLabel(record)))}
+                                  </button>
+                                )}
+                              </td>
+                            );
+                          })}
                           <td>
-                            <div className="attendance-buttons">
-                              {attendanceKeys.map((key) => (
-                                <button
-                                  type="button"
-                                  key={key}
-                                  aria-label={`${student.name}: ${attendanceLabels[key]}`}
-                                  aria-pressed={entries[student.id] === key}
-                                  disabled={busy || future}
-                                  className={`${key} ${entries[student.id] === key ? 'selected' : ''}`}
-                                  onClick={() =>
-                                    changeAttendance({
-                                      ...entries,
-                                      [student.id]: entries[student.id] === key ? null : key,
-                                    })
-                                  }
-                                >
-                                  {attendanceLetters[key]}
-                                </button>
-                              ))}
-                            </div>
+                            <span className="teacher-average">
+                              {score == null
+                                ? '—'
+                                : new Intl.NumberFormat(locale, {
+                                    maximumFractionDigits: 1,
+                                  }).format(score)}
+                            </span>
                           </td>
                         </tr>
-                      ))}
-                      {!visibleStudents.length && (
-                        <tr>
-                          <td colSpan={3}>
-                            <EmptyState title="Студентов не найдено" />
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="attendance-savebar">
-                  <div>
-                    <p>
-                      {future
-                        ? 'Будущее занятие'
-                        : dirty
-                          ? 'Есть несохранённые отметки'
-                          : 'Изменения сохранены'}
-                    </p>
-                    <small>Студент видит только сохранённые отметки.</small>
-                  </div>
-                  <div className="actions">
-                    <button
-                      type="button"
-                      className="button small"
-                      disabled={busy || !dirty}
-                      onClick={() => {
-                        drafts.setAttendance(lesson.id, null);
-                        setError('');
-                      }}
-                    >
-                      Отменить изменения
-                    </button>
-                    <button
-                      type="button"
-                      className="button primary"
-                      disabled={busy || !dirty || future}
-                      onClick={() => void saveAttendance()}
-                    >
-                      {busy ? 'Сохранение…' : 'Сохранить отметки'}
-                    </button>
-                  </div>
-                </div>
-              </section>
-              <div className="attendance-legend">
-                {attendanceKeys.map((key) => (
-                  <span key={key}>
-                    <strong>{attendanceLetters[key]}</strong>
-                    {attendanceLabels[key]}
-                  </span>
-                ))}
-                <span>Повторное нажатие снимает отметку.</span>
+                      );
+                    })}
+                    {!visibleStudents.length && (
+                      <tr>
+                        <td colSpan={columns.length + 2}>
+                          <EmptyState
+                            title={t('Студентов не найдено')}
+                            description={t('Измените поиск или выберите другую группу.')}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </>
+            </section>
           )}
+          <p className="journal-help">
+            {t(
+              'Нажмите ячейку занятия, чтобы изменить отметку. Ячейка задания открывает проверку работы.',
+            )}
+          </p>
         </>
+      )}
+      {editingLesson && editingStudent && (
+        <GradeEditor
+          key={`${editingLesson.id}:${editingStudent.id}`}
+          lesson={editingLesson}
+          student={editingStudent}
+          record={grades.get(`${editingLesson.id}:${editingStudent.id}`)}
+          onClose={() => setEditing(null)}
+        />
       )}
     </>
   );
 }
-
 function FilePreview({ file }: { file: StoredFile }) {
+  const { t } = useI18n();
   const { downloadFile, notify } = useStudyHub();
   const [preview, setPreview] = useState<{
     kind: 'text' | 'image' | 'pdf' | 'download';
@@ -793,10 +654,11 @@ function FilePreview({ file }: { file: StoredFile }) {
           signal: controller.signal,
         });
         if (!response.ok)
-          throw new Error(
+          throw new ApiError(
             response.status === 403
               ? 'Нет доступа к этому файлу.'
               : 'Не удалось открыть файл. Попробуйте позже.',
+            response.status,
           );
         const blob = await response.blob();
         if (controller.signal.aborted) return;
@@ -808,7 +670,13 @@ function FilePreview({ file }: { file: StoredFile }) {
           setPreview({ kind: blob.type === 'application/pdf' ? 'pdf' : 'image', value: objectURL });
         } else setPreview({ kind: 'download', value: '' });
       } catch (error) {
-        if (!controller.signal.aborted) setError(errorMessage(error));
+        if (!controller.signal.aborted) {
+          setError(
+            error instanceof ApiError
+              ? error.message
+              : 'Не удалось связаться с сервером. Проверьте соединение и повторите попытку.',
+          );
+        }
       }
     }
     void load();
@@ -821,24 +689,29 @@ function FilePreview({ file }: { file: StoredFile }) {
     <>
       {error ? (
         <div className="preview-empty" role="alert">
-          {error}
+          {t(error)}
         </div>
       ) : !preview ? (
         <div className="preview-empty" role="status">
-          Открываем файл…
+          {t('Открываем файл…')}{' '}
         </div>
       ) : preview.kind === 'text' ? (
         <pre className="work-code">{preview.value}</pre>
       ) : preview.kind === 'image' ? (
         // Uploaded files use temporary blob URLs and cannot go through the Next.js image optimizer.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={preview.value} alt="Прикреплённая работа студента" className="work-image" />
+        <img src={preview.value} alt={t('Прикреплённая работа студента')} className="work-image" />
       ) : preview.kind === 'pdf' ? (
-        <iframe src={preview.value} sandbox="" title="Просмотр PDF работы" className="work-pdf" />
+        <iframe
+          src={preview.value}
+          sandbox=""
+          title={t('Просмотр PDF работы')}
+          className="work-pdf"
+        />
       ) : (
         <div className="preview-empty">
           <Icon name="file" />
-          <strong>Для этого формата нет предпросмотра</strong>
+          <strong>{t('Для этого формата нет предпросмотра')}</strong>
           <p>{file.name}</p>
         </div>
       )}
@@ -847,10 +720,10 @@ function FilePreview({ file }: { file: StoredFile }) {
           type="button"
           className="button small"
           onClick={() =>
-            void downloadFile(file.id, file.name).catch((error) => notify(errorMessage(error)))
+            void downloadFile(file.id, file.name).catch((error) => notify(t(errorMessage(error))))
           }
         >
-          <Icon name="download" className="sm" /> Скачать файл
+          <Icon name="download" className="sm" /> {t('Скачать файл')}{' '}
         </button>
       </div>
     </>
@@ -870,6 +743,7 @@ function ReviewWorkspace({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const { t, locale } = useI18n();
   const { data, mutate, notify } = useStudyHub();
   const drafts = useTeacherDrafts();
   const draft = drafts.reviews[work.id] || {
@@ -890,8 +764,14 @@ function ReviewWorkspace({
   }
   async function publish(action: 'grade' | 'return', next = false) {
     if (lock.current) return;
-    if (action === 'grade' && draft.grade == null) {
-      setError('Выберите оценку от 2 до 5.');
+    if (
+      action === 'grade' &&
+      (draft.grade == null ||
+        !Number.isInteger(draft.grade) ||
+        draft.grade < 0 ||
+        draft.grade > 100)
+    ) {
+      setError('Введите целое число от 0 до 100.');
       return;
     }
     if (action === 'return' && !draft.comment.trim()) {
@@ -909,7 +789,7 @@ function ReviewWorkspace({
         version: draft.version,
       });
       drafts.setReview(work.id, null);
-      notify(action === 'return' ? 'Работа возвращена на доработку.' : 'Оценка сохранена.');
+      notify(action === 'return' ? t('Работа возвращена на доработку.') : t('Оценка сохранена.'));
       if (next) onNext();
     } catch (error) {
       setError(errorMessage(error));
@@ -921,7 +801,7 @@ function ReviewWorkspace({
   return (
     <>
       <button type="button" className="text-link back-link" onClick={onBack} disabled={busy}>
-        <Icon name="left" className="sm" /> К списку работ
+        <Icon name="left" className="sm" /> {t('К списку работ')}{' '}
       </button>
       <div className="review-workspace-head">
         <div>
@@ -939,7 +819,7 @@ function ReviewWorkspace({
               <div className="grow">
                 <strong>{work.file.name}</strong>
                 <small>
-                  {formatDate(work.submittedAt)} · {formatTime(work.submittedAt)}
+                  {formatDate(work.submittedAt, locale)} · {formatTime(work.submittedAt)}
                 </small>
               </div>
               <WorkBadge status={work.status} />
@@ -947,7 +827,7 @@ function ReviewWorkspace({
             <FilePreview key={work.file.id} file={work.file} />
           </section>
           <details className="work-conditions">
-            <summary>Условия задания и требования</summary>
+            <summary>{t('Условия задания и требования')}</summary>
             <div className="conditions-content">
               <AssignmentConditions assignment={assignment} />
             </div>
@@ -957,33 +837,36 @@ function ReviewWorkspace({
           {work.status !== 'submitted' && (
             <div className={`review-published ${work.status === 'revision' ? 'revision' : ''}`}>
               {work.status === 'reviewed'
-                ? `Выставлена оценка ${work.grade}`
-                : 'Работа возвращена на доработку.'}
+                ? t('Выставлена оценка {value0}', { value0: String(work.grade) })
+                : t('Работа возвращена на доработку.')}
               {work.comment && <p>{work.comment}</p>}
             </div>
           )}
-          <h2>Оценка и обратная связь</h2>
-          <p className="caption">Результат появится у студента после сохранения.</p>
-          <div className="review-grade-picker" role="group" aria-label="Выбрать оценку за работу">
-            {gradeOptions.map((grade) => (
-              <button
-                type="button"
-                key={grade}
-                aria-label={`Оценка ${grade}`}
-                aria-pressed={draft.grade === grade}
-                className={draft.grade === grade ? 'selected' : ''}
-                disabled={busy}
-                onClick={() => update({ ...draft, grade })}
-              >
-                {grade}
-              </button>
-            ))}
-          </div>
-          <Field label="Комментарий студенту">
+          <h2>{t('Оценка и обратная связь')}</h2>
+          <p className="caption">{t('Результат появится у студента после сохранения.')}</p>
+          <Field label={t('Баллы за работу (0–100)')}>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              step={1}
+              aria-label={t('Баллы за работу (0–100)')}
+              value={draft.grade ?? ''}
+              disabled={busy}
+              onChange={(event) =>
+                update({
+                  ...draft,
+                  grade: event.target.value === '' ? null : Number(event.target.value),
+                })
+              }
+            />
+          </Field>{' '}
+          <Field label={t('Комментарий студенту')}>
             <textarea
-              aria-label="Комментарий студенту"
+              aria-label={t('Комментарий студенту')}
               maxLength={2000}
-              placeholder="Что получилось и что стоит улучшить…"
+              placeholder={t('Что получилось и что стоит улучшить…')}
               disabled={busy}
               value={draft.comment}
               onChange={(event) => update({ ...draft, comment: event.target.value })}
@@ -991,9 +874,9 @@ function ReviewWorkspace({
           </Field>
           <div className="review-quick-comments">
             {[
-              'Хорошая работа!',
-              'Добавьте пояснение к решению.',
-              'Проверьте выполнение всех требований.',
+              t('Хорошая работа!'),
+              t('Добавьте пояснение к решению.'),
+              t('Проверьте выполнение всех требований.'),
             ].map((text) => (
               <button
                 type="button"
@@ -1012,25 +895,38 @@ function ReviewWorkspace({
           </div>
           {error && (
             <p className="review-form-error" role="alert">
-              {error}
+              {t(error)}
             </p>
           )}
           <div className="feedback-actions">
             <button
               type="button"
               className="button primary full"
-              disabled={busy || draft.grade == null}
+              disabled={
+                busy ||
+                draft.grade == null ||
+                !Number.isInteger(draft.grade) ||
+                draft.grade < 0 ||
+                draft.grade > 100
+              }
               onClick={() => void publish('grade', true)}
             >
-              {busy ? 'Сохранение…' : 'Сохранить и следующая'} <Icon name="arrow" className="sm" />
+              {busy ? t('Сохранение…') : t('Сохранить и следующая')}{' '}
+              <Icon name="arrow" className="sm" />
             </button>
             <button
               type="button"
               className="button full"
-              disabled={busy || draft.grade == null}
+              disabled={
+                busy ||
+                draft.grade == null ||
+                !Number.isInteger(draft.grade) ||
+                draft.grade < 0 ||
+                draft.grade > 100
+              }
               onClick={() => void publish('grade')}
             >
-              Сохранить оценку
+              {t('Сохранить оценку')}{' '}
             </button>
             <button
               type="button"
@@ -1038,10 +934,12 @@ function ReviewWorkspace({
               disabled={busy}
               onClick={() => void publish('return')}
             >
-              Вернуть на доработку
+              {t('Вернуть на доработку')}{' '}
             </button>
           </div>
-          <p className="caption mt">Для доработки обязательно укажите, что нужно исправить.</p>
+          <p className="caption mt">
+            {t('Для доработки обязательно укажите, что нужно исправить.')}
+          </p>
         </aside>
       </div>
     </>
@@ -1068,6 +966,7 @@ function ReviewContent({
   initialWorkId: string;
   initialAssignmentId: string;
 }) {
+  const { t, locale } = useI18n();
   const { data, user } = useStudyHub();
   const scope = teacherScope(data, user);
   const [selectedId, setSelectedId] = useState<string | null>(initialWorkId || null);
@@ -1108,11 +1007,11 @@ function ReviewContent({
   return (
     <>
       <PageHeading
-        title="Работы на проверку"
-        description="Сначала самые ранние сдачи. Оценка и комментарий — рядом с работой."
+        title={t('Работы на проверку')}
+        description={t('Сначала самые ранние сдачи. Оценка и комментарий — рядом с работой.')}
       />
       <div className="teacher-queue-tabs">
-        <div className="tabs" role="group" aria-label="Статус проверки">
+        <div className="tabs" role="group" aria-label={t('Статус проверки')}>
           {(Object.keys(workLabels) as WorkStatus[]).map((key) => (
             <button
               type="button"
@@ -1121,7 +1020,7 @@ function ReviewContent({
               key={key}
               onClick={() => setStatus(key)}
             >
-              {workLabels[key]}
+              {t(workLabels[key])}
               <span className="tab-number">
                 {
                   scope.records.filter((record) => (record.work?.status || 'missing') === key)
@@ -1134,16 +1033,16 @@ function ReviewContent({
       </div>
       <div className="teacher-toolbar">
         <div className="teacher-filters">
-          <Field label="Группа">
+          <Field label={t('Группа')}>
             <select
-              aria-label="Группа работ"
+              aria-label={t('Группа работ')}
               value={groupId}
               onChange={(event) => {
                 setGroupId(event.target.value);
                 setAssignmentId('');
               }}
             >
-              <option value="">Все мои группы</option>
+              <option value="">{t('Все мои группы')}</option>
               {scope.groups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
@@ -1151,13 +1050,13 @@ function ReviewContent({
               ))}
             </select>
           </Field>
-          <Field label="Задание">
+          <Field label={t('Задание')}>
             <select
-              aria-label="Задание в очереди"
+              aria-label={t('Задание в очереди')}
               value={assignmentId}
               onChange={(event) => setAssignmentId(event.target.value)}
             >
-              <option value="">Все задания</option>
+              <option value="">{t('Все задания')}</option>
               {scope.assignments
                 .filter((assignment) => !groupId || assignment.groupId === groupId)
                 .map((assignment) => (
@@ -1172,8 +1071,8 @@ function ReviewContent({
           <Icon name="search" className="sm" />
           <input
             type="search"
-            aria-label="Поиск по работам"
-            placeholder="Студент или название работы…"
+            aria-label={t('Поиск по работам')}
+            placeholder={t('Студент или название работы…')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -1182,22 +1081,22 @@ function ReviewContent({
       <div className="card teacher-table-wrap">
         {!rows.length ? (
           <EmptyState
-            title="Работ не найдено"
+            title={t('Работ не найдено')}
             description={
               scope.assignments.length
-                ? 'Измените фильтры или дождитесь новых сдач.'
-                : 'Сначала создайте задание для назначенной группы.'
+                ? t('Измените фильтры или дождитесь новых сдач.')
+                : t('Сначала создайте задание для назначенной группы.')
             }
           />
         ) : (
           <table className="review-table">
             <thead>
               <tr>
-                <th>Студент</th>
-                <th>Задание</th>
-                <th>Сдача</th>
-                <th>Статус</th>
-                <th>Действие</th>
+                <th>{t('Студент')}</th>
+                <th>{t('Задание')}</th>
+                <th>{t('Сдача')}</th>
+                <th>{t('Статус')}</th>
+                <th>{t('Действие')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1215,11 +1114,11 @@ function ReviewContent({
                   <td>
                     {record.work ? (
                       <>
-                        {formatDate(record.work.submittedAt)} ·{' '}
+                        {formatDate(record.work.submittedAt, locale)} ·{' '}
                         {formatTime(record.work.submittedAt)}
                         {Date.parse(record.work.submittedAt) >
                           Date.parse(record.assignment.dueAt) && (
-                          <div className="work-meta">После срока</div>
+                          <div className="work-meta">{t('После срока')}</div>
                         )}
                       </>
                     ) : (
@@ -1239,7 +1138,7 @@ function ReviewContent({
                         className="button small"
                         onClick={() => setSelectedId(record.work!.id)}
                       >
-                        {record.work.status === 'submitted' ? 'Проверить' : 'Открыть'}
+                        {record.work.status === 'submitted' ? t('Проверить') : t('Открыть')}
                       </button>
                     ) : (
                       <button
@@ -1247,7 +1146,7 @@ function ReviewContent({
                         className="button small"
                         onClick={() => setInfo(record.assignment)}
                       >
-                        Условия
+                        {t('Условия')}{' '}
                       </button>
                     )}
                   </td>
@@ -1262,7 +1161,7 @@ function ReviewContent({
           <AssignmentConditions assignment={info} />
           <div className="form-actions">
             <button type="button" className="button" onClick={() => setInfo(null)}>
-              Закрыть
+              {t('Закрыть')}{' '}
             </button>
           </div>
         </Modal>
@@ -1278,6 +1177,7 @@ function NewAssignment({
   onClose: () => void;
   onCreated: (groupId: string) => void;
 }) {
+  const { t } = useI18n();
   const { data, user, mutate, notify, now } = useStudyHub();
   const scope = teacherScope(data, user);
   const [groupId, setGroupId] = useState(scope.groups[0]?.id || '');
@@ -1325,7 +1225,7 @@ function NewAssignment({
         teacherId: user.id,
         dueAt: dueAt.toISOString(),
       });
-      notify('Задание создано.');
+      notify(t('Задание создано.'));
       onCreated(groupId);
     } catch (error) {
       setError(errorMessage(error));
@@ -1336,23 +1236,23 @@ function NewAssignment({
   }
   return (
     <Modal
-      title="Создать задание"
+      title={t('Создать задание')}
       onClose={() => {
         if (!busy) onClose();
       }}
     >
       <form onSubmit={submit}>
-        <Field label="Название">
+        <Field label={t('Название')}>
           <input
             name="title"
             required
             maxLength={120}
-            placeholder="Название задания"
+            placeholder={t('Название задания')}
             disabled={busy}
           />
         </Field>
         <div className="form-row">
-          <Field label="Группа">
+          <Field label={t('Группа')}>
             <select
               name="groupId"
               value={groupId}
@@ -1369,7 +1269,7 @@ function NewAssignment({
               ))}
             </select>
           </Field>
-          <Field label="Предмет">
+          <Field label={t('Предмет')}>
             <select
               name="subjectId"
               value={subjectId}
@@ -1385,45 +1285,45 @@ function NewAssignment({
           </Field>
         </div>
         <div className="form-row">
-          <Field label="Срок сдачи (UTC+5)">
+          <Field label={t('Срок сдачи (UTC+5)')}>
             <input type="datetime-local" name="dueAt" required disabled={busy} />
           </Field>
-          <Field label="Тип">
+          <Field label={t('Тип')}>
             <select name="type" disabled={busy}>
-              <option>Лабораторная работа</option>
-              <option>Практическая работа</option>
-              <option>Домашнее задание</option>
+              <option>{t('Лабораторная работа')}</option>
+              <option>{t('Практическая работа')}</option>
+              <option>{t('Домашнее задание')}</option>
             </select>
           </Field>
         </div>
-        <Field label="Условия выполнения">
+        <Field label={t('Условия выполнения')}>
           <textarea
             name="description"
             required
             maxLength={3000}
             disabled={busy}
-            placeholder="Что нужно сделать и какой результат приложить"
+            placeholder={t('Что нужно сделать и какой результат приложить')}
           />
         </Field>
-        <Field label="Этапы выполнения">
+        <Field label={t('Этапы выполнения')}>
           <textarea
             name="steps"
             maxLength={3000}
             disabled={busy}
-            placeholder="Один этап на строку"
+            placeholder={t('Один этап на строку')}
           />
         </Field>
         {error && (
           <p className="error-text" role="alert">
-            {error}
+            {t(error)}
           </p>
         )}
         <div className="form-actions">
           <button type="button" className="button" disabled={busy} onClick={onClose}>
-            Отмена
+            {t('Отмена')}{' '}
           </button>
           <button type="submit" className="button primary" disabled={busy}>
-            {busy ? 'Создание…' : 'Создать задание'}
+            {busy ? t('Создание…') : t('Создать задание')}
           </button>
         </div>
       </form>
@@ -1432,6 +1332,7 @@ function NewAssignment({
 }
 
 export function AssignmentsPage() {
+  const { t, locale } = useI18n();
   const { data, user } = useStudyHub();
   const scope = teacherScope(data, user);
   const [groupId, setGroupId] = useState('');
@@ -1443,8 +1344,8 @@ export function AssignmentsPage() {
   return (
     <>
       <PageHeading
-        title="Мои задания"
-        description="Условия, сроки и прогресс каждой группы."
+        title={t('Мои задания')}
+        description={t('Условия, сроки и прогресс каждой группы.')}
         action={
           <button
             type="button"
@@ -1452,19 +1353,19 @@ export function AssignmentsPage() {
             disabled={!scope.pairs.length}
             onClick={() => setCreating(true)}
           >
-            <Icon name="plus" className="sm" /> Создать задание
+            <Icon name="plus" className="sm" /> {t('Создать задание')}{' '}
           </button>
         }
       />
       <div className="teacher-toolbar">
         <div className="teacher-filters">
-          <Field label="Группа">
+          <Field label={t('Группа')}>
             <select
-              aria-label="Группа заданий"
+              aria-label={t('Группа заданий')}
               value={groupId}
               onChange={(event) => setGroupId(event.target.value)}
             >
-              <option value="">Все мои группы</option>
+              <option value="">{t('Все мои группы')}</option>
               {scope.groups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
@@ -1476,11 +1377,11 @@ export function AssignmentsPage() {
       </div>
       {!assignments.length ? (
         <EmptyState
-          title="Заданий пока нет"
+          title={t('Заданий пока нет')}
           description={
             scope.pairs.length
-              ? 'Создайте задание для своей группы.'
-              : 'Администратор ещё не назначил вам группы и предметы.'
+              ? t('Создайте задание для своей группы.')
+              : t('Администратор ещё не назначил вам группы и предметы.')
           }
         />
       ) : (
@@ -1494,8 +1395,8 @@ export function AssignmentsPage() {
                 <Badge kind="neutral">{title(data.groups, assignment.groupId)}</Badge>
                 <h2>{assignment.title}</h2>
                 <p>
-                  {title(data.subjects, assignment.subjectId)} · до {formatDate(assignment.dueAt)},{' '}
-                  {formatTime(assignment.dueAt)}
+                  {title(data.subjects, assignment.subjectId)} {t('· до')}{' '}
+                  {formatDate(assignment.dueAt, locale)}, {formatTime(assignment.dueAt)}
                 </p>
                 <div className="teacher-assignment-counts">
                   {(['submitted', 'reviewed', 'missing'] as WorkStatus[]).map((status) => (
@@ -1506,7 +1407,7 @@ export function AssignmentsPage() {
                             .length
                         }
                       </strong>
-                      <small>{workLabels[status]}</small>
+                      <small>{t(workLabels[status])}</small>
                     </div>
                   ))}
                 </div>
@@ -1516,13 +1417,13 @@ export function AssignmentsPage() {
                     className="button small"
                     onClick={() => setInfo(assignment)}
                   >
-                    Условия
+                    {t('Условия')}{' '}
                   </button>
                   <Link
                     className="button small primary"
                     href={`/review?assignment=${encoded(assignment.id)}`}
                   >
-                    Работы группы
+                    {t('Работы группы')}{' '}
                   </Link>
                 </div>
               </article>
@@ -1545,10 +1446,10 @@ export function AssignmentsPage() {
           <AssignmentConditions assignment={info} />
           <div className="form-actions">
             <button type="button" className="button" onClick={() => setInfo(null)}>
-              Закрыть
+              {t('Закрыть')}{' '}
             </button>
             <Link className="button primary" href={`/review?assignment=${encoded(info.id)}`}>
-              Работы группы
+              {t('Работы группы')}{' '}
             </Link>
           </div>
         </Modal>

@@ -66,7 +66,7 @@ test(
       (grade) => grade.lessonId === oldLesson.id && grade.studentId === student.id,
     );
     await saveGrade(teacher, oldLesson.id, student.id, {
-      grade: 4,
+      grade: 80,
       version: oldGrade?.version ?? null,
     });
 
@@ -108,7 +108,7 @@ test(
     );
     await reviewSubmission(teacher, submitted.id, {
       action: 'grade',
-      grade: 5,
+      grade: 100,
       comment: 'Проверено до расширения базы.',
       version: submitted.version,
     });

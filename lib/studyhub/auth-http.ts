@@ -25,6 +25,7 @@ import {
   deleteAnnouncement,
 } from './auth-store.mjs';
 import { maxSubmissionBytes } from './api-contract';
+import { databaseErrorInfo } from '../../database/connection.mjs';
 
 const COOKIE = 'studyhub_session';
 const BODY_LIMIT = 16 * 1024;
@@ -107,10 +108,7 @@ async function execute(request: NextRequest, action: () => NextResponse | Promis
       if (error.retryAfter) response.headers.set('Retry-After', String(error.retryAfter));
       return response;
     }
-    console.error(
-      '[StudyHUB auth] Request failed:',
-      error instanceof Error ? error.name : 'UnknownError',
-    );
+    console.error('[StudyHUB auth] Request failed:', databaseErrorInfo(error));
     return json(
       {
         error: {
@@ -345,7 +343,7 @@ export function lessonMutation(request: NextRequest, id = '') {
 export function gradeMutation(request: NextRequest, lessonId: string, studentId: string) {
   return execute(request, async () => {
     const session = await mutationSession(request, true);
-    const input = await body(request, ['grade', 'version']);
+    const input = await body(request, ['grade', 'status', 'version']);
     return json(await saveGrade(session.user!, lessonId, studentId, input));
   });
 }

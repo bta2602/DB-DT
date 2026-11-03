@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from './preferences';
+
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type {
@@ -26,17 +28,17 @@ import { AnnouncementsPanel } from './publication-panels';
 type DirectoryKind = 'users' | 'groups' | 'subjects' | 'rooms' | 'teachingAssignments';
 type DirectoryItem = User | Group | Subject | Room;
 type Editor = { kind: DirectoryKind; item?: DirectoryItem };
-const directoryTitles: Record<DirectoryKind, string> = {
-  users: 'пользователя',
-  groups: 'группу',
-  subjects: 'предмет',
-  rooms: 'аудиторию',
-  teachingAssignments: 'назначение',
+const directoryTitles: Record<DirectoryKind, [string, string]> = {
+  users: ['Добавить пользователя', 'Изменить пользователя'],
+  groups: ['Добавить группу', 'Изменить группу'],
+  subjects: ['Добавить предмет', 'Изменить предмет'],
+  rooms: ['Добавить аудиторию', 'Изменить аудиторию'],
+  teachingAssignments: ['Добавить назначение', 'Изменить назначение'],
 };
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'Не удалось сохранить изменения.';
 const referenceName = (items: { id: string; name: string }[], id: string | null) =>
-  items.find((item) => item.id === id)?.name || 'Не указано';
+  items.find((item) => item.id === id)?.name || '—';
 
 function SelectOptions({
   items,
@@ -77,16 +79,17 @@ function Table({ headers, children }: { headers: string[]; children: ReactNode }
 }
 
 function Statistics({ items }: { items: [number, string, string][] }) {
+  const { t } = useI18n();
   return (
     <div className="teacher-stats">
       {items.map(([value, label, icon]) => (
-        <div className="teacher-stat" key={label}>
+        <div className="teacher-stat" key={t(label)}>
           <span className="stat-icon">
             <Icon name={icon} />
           </span>
           <div>
             <strong>{value}</strong>
-            <p>{label}</p>
+            <p>{t(label)}</p>
           </div>
         </div>
       ))}
@@ -103,13 +106,14 @@ export function LessonList({
   onEdit?: (lesson: Lesson) => void;
   now?: number;
 }) {
+  const { t } = useI18n();
   const { data, now: snapshotTime } = useStudyHub();
   if (!lessons.length)
     return (
       <div className="card">
         <EmptyState
-          title="Занятий пока нет"
-          description="Здесь появится опубликованное расписание."
+          title={t('Занятий пока нет')}
+          description={t('Здесь появится опубликованное расписание.')}
         />
       </div>
     );
@@ -132,19 +136,21 @@ export function LessonList({
                 {lesson.kind} · {referenceName(data.users, lesson.teacherId)}
               </p>
               <small>
-                {referenceName(data.groups, lesson.groupId)} · Ауд.{' '}
+                {referenceName(data.groups, lesson.groupId)} {t('· Ауд.')}{' '}
                 {referenceName(data.rooms, lesson.roomId)}
               </small>
             </div>
             <Badge kind={status === 'current' ? '' : status === 'cancelled' ? 'red' : 'neutral'}>
-              {statusNames[status]}
+              {t(statusNames[status])}
             </Badge>
             {onEdit && (
               <button
                 type="button"
                 className="button small"
                 onClick={() => onEdit(lesson)}
-                aria-label={`Изменить занятие ${referenceName(data.subjects, lesson.subjectId)}`}
+                aria-label={t('Изменить занятие: {name}', {
+                  name: referenceName(data.subjects, lesson.subjectId),
+                })}
               >
                 <Icon name="edit" className="sm" />
               </button>
@@ -186,20 +192,21 @@ function missingReferences(data: Bootstrap) {
 }
 
 function SetupHint({ onOpen }: { onOpen: () => void }) {
+  const { t } = useI18n();
   const { data } = useStudyHub();
   const missing = missingReferences(data);
   if (!missing.length) return null;
   return (
-    <section className="lesson-setup-hint" aria-label="Подготовка расписания">
+    <section className="lesson-setup-hint" aria-label={t('Подготовка расписания')}>
       <div>
-        <strong>Подготовьте первое занятие</strong>
+        <strong>{t('Подготовьте первое занятие')}</strong>
         <p>
-          Добавьте недостающие данные:{' '}
-          {missing.map((item) => item.label.toLocaleLowerCase()).join(', ')}.
+          {t('Добавьте недостающие данные:')}{' '}
+          {missing.map((item) => t(item.label).toLocaleLowerCase()).join(', ')}.
         </p>
       </div>
       <button type="button" className="button small" onClick={onOpen}>
-        Заполнить справочники
+        {t('Заполнить справочники')}
       </button>
     </section>
   );
@@ -212,6 +219,7 @@ function DirectoryEditor({
   onSaved,
   forLesson = false,
 }: Editor & { onClose: () => void; onSaved?: () => void; forLesson?: boolean }) {
+  const { t } = useI18n();
   const { data, mutate, notify } = useStudyHub();
   const oldUser = kind === 'users' ? (item as User | undefined) : undefined;
   const oldGroup = kind === 'groups' ? (item as Group | undefined) : undefined;
@@ -265,7 +273,7 @@ function DirectoryEditor({
         `/api/${path}${item ? `/${encodeURIComponent(item.id)}` : ''}`,
         body,
       );
-      notify('Запись сохранена.');
+      notify(t('Запись сохранена.'));
       if (onSaved) onSaved();
       else onClose();
     } catch (failure) {
@@ -277,7 +285,13 @@ function DirectoryEditor({
 
   return (
     <Modal
-      title={`${item ? 'Изменить' : 'Добавить'} ${forLesson && kind === 'users' ? 'преподавателя' : directoryTitles[kind]}`}
+      title={t(
+        forLesson && kind === 'users'
+          ? item
+            ? 'Изменить преподавателя'
+            : 'Добавить преподавателя'
+          : directoryTitles[kind][item ? 1 : 0],
+      )}
       onClose={close}
     >
       <form onSubmit={save} aria-busy={busy}>
@@ -285,33 +299,33 @@ function DirectoryEditor({
           <>
             {incompleteAssignment && (
               <p className="publication-hint">
-                Сначала добавьте преподавателя, группу и предмет в соседних вкладках.
+                {t('Сначала добавьте преподавателя, группу и предмет в соседних вкладках.')}
               </p>
             )}
-            <Field label="Преподаватель">
+            <Field label={t('Преподаватель')}>
               <select name="teacherId" required>
                 <SelectOptions items={teachers} />
               </select>
             </Field>
-            <Field label="Группа">
+            <Field label={t('Группа')}>
               <select name="groupId" required>
                 <SelectOptions items={data.groups} />
               </select>
             </Field>
-            <Field label="Предмет">
+            <Field label={t('Предмет')}>
               <select name="subjectId" required>
                 <SelectOptions items={data.subjects} />
               </select>
             </Field>
           </>
         ) : (
-          <Field label={kind === 'users' ? 'Имя и фамилия' : 'Название'}>
+          <Field label={kind === 'users' ? t('Имя и фамилия') : t('Название')}>
             <input name="name" required maxLength={120} defaultValue={item?.name || ''} />
           </Field>
         )}
         {kind === 'users' && (
           <>
-            <Field label="Почта">
+            <Field label={t('Почта')}>
               <input
                 name="email"
                 type="email"
@@ -321,7 +335,7 @@ function DirectoryEditor({
                 autoComplete="off"
               />
             </Field>
-            <Field label="Роль">
+            <Field label={t('Роль')}>
               <select
                 name="role"
                 value={role}
@@ -329,21 +343,21 @@ function DirectoryEditor({
               >
                 {Object.entries(roles).map(([value, label]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(label)}
                   </option>
                 ))}
               </select>
             </Field>
             {role === 'student' && (
-              <Field label="Группа студента">
+              <Field label={t('Группа студента')}>
                 <select name="groupId" defaultValue={oldUser?.groupId || ''}>
-                  <SelectOptions items={data.groups} blank="Без группы" />
+                  <SelectOptions items={data.groups} blank={t('Без группы')} />
                 </select>
               </Field>
             )}
             {!item && (
               <div className="field">
-                <label htmlFor="new-user-password">Пароль для входа</label>
+                <label htmlFor="new-user-password">{t('Пароль для входа')}</label>
                 <div className="auth-password-control">
                   <input
                     id="new-user-password"
@@ -362,11 +376,11 @@ function DirectoryEditor({
                     aria-controls="new-user-password"
                     onClick={() => setShowPassword((value) => !value)}
                   >
-                    {showPassword ? 'Скрыть' : 'Показать'}
+                    {showPassword ? t('Скрыть') : t('Показать')}
                   </button>
                 </div>
                 <small id="new-user-password-hint" className="auth-field-hint">
-                  От 12 до 128 символов. Сообщите пользователю почту и пароль для входа.
+                  {t('От 12 до 128 символов. Сообщите пользователю почту и пароль для входа.')}
                 </small>
               </div>
             )}
@@ -374,7 +388,7 @@ function DirectoryEditor({
         )}
         {kind === 'groups' && (
           <>
-            <Field label="Курс">
+            <Field label={t('Курс')}>
               <input
                 name="course"
                 type="number"
@@ -384,15 +398,15 @@ function DirectoryEditor({
                 defaultValue={oldGroup?.course || 1}
               />
             </Field>
-            <Field label="Куратор">
+            <Field label={t('Куратор')}>
               <select name="curatorId" defaultValue={oldGroup?.curatorId || ''}>
-                <SelectOptions items={teachers} blank="Не назначен" />
+                <SelectOptions items={teachers} blank={t('Не назначен')} />
               </select>
             </Field>
           </>
         )}
         {kind === 'rooms' && (
-          <Field label="Вместимость">
+          <Field label={t('Вместимость')}>
             <input
               name="capacity"
               type="number"
@@ -403,14 +417,14 @@ function DirectoryEditor({
           </Field>
         )}
         <p className="form-error error-text" role="alert">
-          {error}
+          {t(error)}
         </p>
         <div className="form-actions">
           <button type="button" className="button" disabled={busy} onClick={close}>
-            {forLesson ? 'Назад' : 'Отмена'}
+            {forLesson ? t('Назад') : t('Отмена')}
           </button>
           <button type="submit" className="button primary" disabled={busy || incompleteAssignment}>
-            {busy ? 'Сохраняем…' : 'Сохранить'}
+            {busy ? t('Сохраняем…') : t('Сохранить')}
           </button>
         </div>
       </form>
@@ -427,6 +441,7 @@ function LessonEditor({
   initialDate?: string;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const { data, mutate, notify, now } = useStudyHub();
   const [setup, setSetup] = useState<DirectoryKind | null>(null);
   const [busy, setBusy] = useState(false);
@@ -446,24 +461,25 @@ function LessonEditor({
     );
   if (missing.length)
     return (
-      <Modal title="Подготовка первого занятия" onClose={close}>
+      <Modal title={t('Подготовка первого занятия')} onClose={close}>
         <p className="muted">
-          Для расписания нужны группа, предмет, преподаватель и аудитория. Добавьте недостающие
-          записи — затем откроется форма занятия.
+          {t(
+            'Для расписания нужны группа, предмет, преподаватель и аудитория. Добавьте недостающие записи — затем откроется форма занятия.',
+          )}
         </p>
         <ul className="lesson-setup-list">
           {missing.map((item) => (
             <li key={item.kind}>
-              <span>{item.label}</span>
+              <span>{t(item.label)}</span>
               <button type="button" className="button small" onClick={() => setSetup(item.kind)}>
-                {item.action}
+                {t(item.action)}
               </button>
             </li>
           ))}
         </ul>
         <div className="form-actions">
           <button type="button" className="button" onClick={close}>
-            Закрыть
+            {t('Закрыть')}
           </button>
         </div>
       </Modal>
@@ -479,7 +495,7 @@ function LessonEditor({
     try {
       const startsAt = new Date(`${value('date')}T${value('start')}:00+05:00`).toISOString();
       const endsAt = new Date(`${value('date')}T${value('end')}:00+05:00`).toISOString();
-      if (endsAt <= startsAt) throw new Error('Время окончания должно быть позже начала.');
+      if (endsAt <= startsAt) throw new Error(t('Время окончания должно быть позже начала.'));
       const body = {
         subjectId: value('subjectId'),
         groupId: value('groupId'),
@@ -505,14 +521,14 @@ function LessonEditor({
               other.roomId === body.roomId),
         )
       ) {
-        throw new Error('Группа, преподаватель или аудитория уже заняты в это время.');
+        throw new Error(t('Группа, преподаватель или аудитория уже заняты в это время.'));
       }
       await mutate(
         lesson ? 'PATCH' : 'POST',
         `/api/lessons${lesson ? `/${encodeURIComponent(lesson.id)}` : ''}`,
         body,
       );
-      notify('Занятие сохранено.');
+      notify(t('Занятие сохранено.'));
       onClose();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -530,7 +546,7 @@ function LessonEditor({
         status: lesson.status === 'cancelled' ? 'scheduled' : 'cancelled',
         version: lesson.version,
       });
-      notify('Занятие обновлено.');
+      notify(t('Занятие обновлено.'));
       onClose();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -540,32 +556,32 @@ function LessonEditor({
   }
 
   return (
-    <Modal title={lesson ? 'Изменить занятие' : 'Новое занятие'} onClose={close}>
+    <Modal title={lesson ? t('Изменить занятие') : t('Новое занятие')} onClose={close}>
       <form onSubmit={save} aria-busy={busy}>
         <div className="form-row">
-          <Field label="Предмет">
+          <Field label={t('Предмет')}>
             <select name="subjectId" required defaultValue={lesson?.subjectId}>
               <SelectOptions items={data.subjects} />
             </select>
           </Field>
-          <Field label="Группа">
+          <Field label={t('Группа')}>
             <select name="groupId" required defaultValue={lesson?.groupId}>
               <SelectOptions items={data.groups} />
             </select>
           </Field>
         </div>
-        <Field label="Преподаватель">
+        <Field label={t('Преподаватель')}>
           <select name="teacherId" required defaultValue={lesson?.teacherId}>
             <SelectOptions items={data.users.filter((user) => user.role === 'teacher')} />
           </select>
         </Field>
         <div className="form-row">
-          <Field label="Аудитория">
+          <Field label={t('Аудитория')}>
             <select name="roomId" required defaultValue={lesson?.roomId}>
               <SelectOptions items={data.rooms} />
             </select>
           </Field>
-          <Field label="Дата">
+          <Field label={t('Дата')}>
             <input
               name="date"
               type="date"
@@ -577,7 +593,7 @@ function LessonEditor({
           </Field>
         </div>
         <div className="form-row">
-          <Field label="Начало">
+          <Field label={t('Начало')}>
             <input
               name="start"
               type="time"
@@ -585,7 +601,7 @@ function LessonEditor({
               defaultValue={lesson ? formatTime(lesson.startsAt) : '09:00'}
             />
           </Field>
-          <Field label="Окончание">
+          <Field label={t('Окончание')}>
             <input
               name="end"
               type="time"
@@ -594,32 +610,32 @@ function LessonEditor({
             />
           </Field>
         </div>
-        <Field label="Тип занятия">
+        <Field label={t('Тип занятия')}>
           <input
             name="kind"
             required
             maxLength={60}
             defaultValue={lesson?.kind || ''}
-            placeholder="Лекция, практика…"
+            placeholder={t('Лекция, практика…')}
           />
         </Field>
-        <Field label="Примечание">
+        <Field label={t('Примечание')}>
           <textarea name="note" maxLength={1000} defaultValue={lesson?.note || ''} />
         </Field>
         <p className="form-error error-text" role="alert">
-          {error}
+          {t(error)}
         </p>
         <div className="form-actions">
           {lesson && (
             <button type="button" className="button danger" disabled={busy} onClick={toggle}>
-              {lesson.status === 'cancelled' ? 'Восстановить занятие' : 'Отменить занятие'}
+              {lesson.status === 'cancelled' ? t('Восстановить занятие') : t('Отменить занятие')}
             </button>
           )}
           <button type="button" className="button" disabled={busy} onClick={close}>
-            Закрыть
+            {t('Закрыть')}
           </button>
           <button type="submit" className="button primary" disabled={busy}>
-            {busy ? 'Сохраняем…' : 'Сохранить'}
+            {busy ? t('Сохраняем…') : t('Сохранить')}
           </button>
         </div>
       </form>
@@ -628,6 +644,7 @@ function LessonEditor({
 }
 
 export function AdminOverview() {
+  const { t, locale } = useI18n();
   const { data, now } = useStudyHub();
   const [editing, setEditing] = useState<Lesson | 'new' | null>(null);
   const active = data.lessons
@@ -642,45 +659,46 @@ export function AdminOverview() {
   return (
     <>
       <PageHeading
-        title="Учебный день под контролем."
-        description="Кто сейчас на занятии, в какой группе и аудитории."
+        title={t('Учебный день под контролем.')}
+        description={t('Кто сейчас на занятии, в какой группе и аудитории.')}
         action={
           <button type="button" className="button primary" onClick={() => setEditing('new')}>
             <Icon name="plus" className="sm" />
-            Добавить занятие
+            {t('Добавить занятие')}
           </button>
         }
       />
       <SetupHint onOpen={() => setEditing('new')} />
       <Statistics
         items={[
-          [active.length, 'Занятий идут сейчас', 'calendar'],
+          [active.length, t('Занятий идут сейчас'), 'calendar'],
           [
             new Set(active.map((lesson) => lesson.teacherId)).size,
-            'Преподавателей на парах',
+            t('Преподавателей на парах'),
             'users',
           ],
           [
             Math.max(0, data.rooms.length - new Set(active.map((lesson) => lesson.roomId)).size),
-            'Свободных аудиторий',
+            t('Свободных аудиторий'),
             'building',
           ],
         ]}
       />
       <section>
         <div className="section-head">
-          <h2>Сейчас на занятиях</h2>
+          <h2>{t('Сейчас на занятиях')}</h2>
           <span className="live-clock">
-            {formatTime(new Date(now).toISOString())} · {formatDate(new Date(now).toISOString())}
+            {formatTime(new Date(now).toISOString())} ·{' '}
+            {formatDate(new Date(now).toISOString(), locale)}
           </span>
         </div>
         <LessonList lessons={active} now={now} onEdit={setEditing} />
       </section>
       <section className="mt">
         <div className="section-head">
-          <h2>Следующие занятия</h2>
+          <h2>{t('Следующие занятия')}</h2>
           <Link href="/schedule" className="button small">
-            Расписание
+            {t('Расписание')}
           </Link>
         </div>
         <LessonList lessons={next.slice(0, 6)} now={now} onEdit={setEditing} />
@@ -697,6 +715,7 @@ export function AdminOverview() {
 }
 
 export function SchedulePage() {
+  const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
   const [date, setDate] = useState(() => dateKey(new Date(now)));
   const [group, setGroup] = useState('');
@@ -716,19 +735,19 @@ export function SchedulePage() {
   return (
     <>
       <PageHeading
-        title="Расписание"
-        description="Занятия, преподаватели и аудитории."
+        title={t('Расписание')}
+        description={t('Занятия, преподаватели и аудитории.')}
         action={
           admin && (
             <button type="button" className="button primary" onClick={() => setEditing('new')}>
               <Icon name="plus" className="sm" />
-              Добавить занятие
+              {t('Добавить занятие')}
             </button>
           )
         }
       />
       <div className="publication-toolbar">
-        <Field label="Дата">
+        <Field label={t('Дата')}>
           <input
             type="date"
             required
@@ -738,12 +757,12 @@ export function SchedulePage() {
             }}
           />
         </Field>
-        <Field label="Группа">
+        <Field label={t('Группа')}>
           <select value={group} onChange={(event) => setGroup(event.target.value)}>
-            <SelectOptions items={data.groups} blank="Все группы" />
+            <SelectOptions items={data.groups} blank={t('Все группы')} />
           </select>
         </Field>
-        <div className="tabs" aria-label="Вид расписания">
+        <div className="tabs" aria-label={t('Вид расписания')}>
           {(['day', 'week'] as const).map((value) => (
             <button
               type="button"
@@ -752,19 +771,19 @@ export function SchedulePage() {
               aria-pressed={mode === value}
               onClick={() => setMode(value)}
             >
-              {value === 'day' ? 'День' : 'Неделя'}
+              {value === 'day' ? t('День') : t('Неделя')}
             </button>
           ))}
         </div>
         <button type="button" className="button" onClick={() => setDate(dateKey(new Date(now)))}>
-          Сегодня
+          {t('Сегодня')}
         </button>
       </div>
       {admin && <SetupHint onOpen={() => setEditing('new')} />}
       <div className={mode === 'week' ? 'publication-week' : ''}>
         {dates.map((day) => (
           <section key={day}>
-            <h2 className="schedule-date-title">{formatDate(day)}</h2>
+            <h2 className="schedule-date-title">{formatDate(day, locale)}</h2>
             <LessonList
               lessons={data.lessons
                 .filter(
@@ -790,22 +809,23 @@ export function SchedulePage() {
 }
 
 export function RoomsPage() {
+  const { t } = useI18n();
   const { data, now } = useStudyHub();
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
   return (
     <>
       <PageHeading
-        title="Аудитории"
-        description="Занятость помещений в текущий момент."
+        title={t('Аудитории')}
+        description={t('Занятость помещений в текущий момент.')}
         action={
           <button type="button" className="button primary" onClick={() => setEditing('new')}>
             <Icon name="plus" className="sm" />
-            Добавить аудиторию
+            {t('Добавить аудиторию')}
           </button>
         }
       />
       {data.rooms.length ? (
-        <Table headers={['Аудитория', 'Вместимость', 'Сейчас', 'Действие']}>
+        <Table headers={[t('Аудитория'), t('Вместимость'), t('Сейчас'), t('Действие')]}>
           {data.rooms.map((room) => {
             const lesson = data.lessons.find(
               (lesson) => lesson.roomId === room.id && lessonStatus(lesson, now) === 'current',
@@ -822,12 +842,12 @@ export function RoomsPage() {
                       {referenceName(data.subjects, lesson.subjectId)}
                       <br />
                       <span className="muted">
-                        {referenceName(data.groups, lesson.groupId)} · до{' '}
+                        {referenceName(data.groups, lesson.groupId)} {t('· до')}{' '}
                         {formatTime(lesson.endsAt)}
                       </span>
                     </>
                   ) : (
-                    <Badge>Свободна</Badge>
+                    <Badge>{t('Свободна')}</Badge>
                   )}
                 </td>
                 <td>
@@ -835,9 +855,9 @@ export function RoomsPage() {
                     type="button"
                     className="button small"
                     onClick={() => setEditing(room)}
-                    aria-label={`Изменить аудиторию ${room.name}`}
+                    aria-label={t('Изменить аудиторию: {name}', { name: room.name })}
                   >
-                    Изменить
+                    {t('Изменить')}
                   </button>
                 </td>
               </tr>
@@ -846,8 +866,8 @@ export function RoomsPage() {
         </Table>
       ) : (
         <EmptyState
-          title="Аудитории ещё не добавлены"
-          description="Добавьте помещения, чтобы составить расписание."
+          title={t('Аудитории ещё не добавлены')}
+          description={t('Добавьте помещения, чтобы составить расписание.')}
         />
       )}
       {editing && (
@@ -862,6 +882,7 @@ export function RoomsPage() {
 }
 
 export function PeoplePage() {
+  const { t, locale } = useI18n();
   const { data } = useStudyHub();
   const [tab, setTab] = useState<Exclude<DirectoryKind, 'rooms'>>('users');
   const [editing, setEditing] = useState<Editor | null>(null);
@@ -869,9 +890,9 @@ export function PeoplePage() {
   const [role, setRole] = useState('');
   const [group, setGroup] = useState('');
   const [page, setPage] = useState(0);
-  const search = query.trim().toLocaleLowerCase('ru');
+  const search = query.trim().toLocaleLowerCase(locale);
   const matches = (...values: string[]) =>
-    values.join(' ').toLocaleLowerCase('ru').includes(search);
+    values.join(' ').toLocaleLowerCase(locale).includes(search);
   const filtered = {
     users: data.users.filter(
       (user) =>
@@ -895,32 +916,32 @@ export function PeoplePage() {
   const currentPage = Math.min(page, lastPage);
   const start = currentPage * pageSize;
   const tabs = {
-    users: 'Пользователи',
-    groups: 'Группы',
-    subjects: 'Предметы',
-    teachingAssignments: 'Назначения',
+    users: t('Пользователи'),
+    groups: t('Группы'),
+    subjects: t('Предметы'),
+    teachingAssignments: t('Назначения'),
   };
   const headers = {
-    users: ['Пользователь', 'Почта', 'Роль', 'Действие'],
-    groups: ['Группа', 'Курс', 'Куратор', 'Действие'],
-    subjects: ['Предмет', 'Действие'],
-    teachingAssignments: ['Преподаватель', 'Группа', 'Предмет'],
+    users: [t('Пользователь'), t('Почта'), t('Роль'), t('Действие')],
+    groups: [t('Группа'), t('Курс'), t('Куратор'), t('Действие')],
+    subjects: [t('Предмет'), t('Действие')],
+    teachingAssignments: [t('Преподаватель'), t('Группа'), t('Предмет')],
   };
   const editButton = (kind: DirectoryKind, item: DirectoryItem) => (
     <button
       type="button"
       className="button small"
       onClick={() => setEditing({ kind, item })}
-      aria-label={`Изменить: ${item.name}`}
+      aria-label={t('Изменить: {name}', { name: item.name })}
     >
-      Изменить
+      {t('Изменить')}
     </button>
   );
   return (
     <>
       <PageHeading
-        title="Пользователи и группы"
-        description="Справочники учебного пространства."
+        title={t('Пользователи и группы')}
+        description={t('Справочники учебного пространства.')}
         action={
           <button
             type="button"
@@ -928,18 +949,22 @@ export function PeoplePage() {
             onClick={() => setEditing({ kind: tab })}
           >
             <Icon name="plus" className="sm" />
-            Добавить
+            {t('Добавить')}
           </button>
         }
       />
       <Statistics
         items={[
-          [data.users.filter((user) => user.role === 'student').length, 'Студентов', 'users'],
-          [data.users.filter((user) => user.role === 'teacher').length, 'Преподавателей', 'book'],
-          [data.groups.length, 'Учебных групп', 'building'],
+          [data.users.filter((user) => user.role === 'student').length, t('Студентов'), 'users'],
+          [
+            data.users.filter((user) => user.role === 'teacher').length,
+            t('Преподавателей'),
+            'book',
+          ],
+          [data.groups.length, t('Учебных групп'), 'building'],
         ]}
       />
-      <div className="tabs mb" aria-label="Справочники">
+      <div className="tabs mb" aria-label={t('Справочники')}>
         {Object.entries(tabs).map(([value, title]) => (
           <button
             type="button"
@@ -957,11 +982,11 @@ export function PeoplePage() {
         ))}
       </div>
       <div className="directory-filters">
-        <Field label="Поиск по справочнику">
+        <Field label={t('Поиск по справочнику')}>
           <input
             type="search"
             value={query}
-            placeholder={tab === 'users' ? 'Имя, почта или группа' : 'Название или имя'}
+            placeholder={tab === 'users' ? t('Имя, почта или группа') : t('Название или имя')}
             onChange={(event) => {
               setQuery(event.target.value);
               setPage(0);
@@ -970,7 +995,7 @@ export function PeoplePage() {
         </Field>
         {tab === 'users' && (
           <>
-            <Field label="Роль пользователя">
+            <Field label={t('Роль пользователя')}>
               <select
                 value={role}
                 onChange={(event) => {
@@ -979,15 +1004,15 @@ export function PeoplePage() {
                   setPage(0);
                 }}
               >
-                <option value="">Все роли</option>
+                <option value="">{t('Все роли')}</option>
                 {Object.entries(roles).map(([value, label]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(label)}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Учебная группа">
+            <Field label={t('Учебная группа')}>
               <select
                 value={group}
                 onChange={(event) => {
@@ -996,7 +1021,7 @@ export function PeoplePage() {
                   setPage(0);
                 }}
               >
-                <SelectOptions items={data.groups} blank="Все группы" />
+                <SelectOptions items={data.groups} blank={t('Все группы')} />
               </select>
             </Field>
           </>
@@ -1004,11 +1029,11 @@ export function PeoplePage() {
       </div>
       {!count ? (
         <EmptyState
-          title={data[tab].length ? 'Ничего не найдено' : 'Пока пусто'}
+          title={data[tab].length ? t('Ничего не найдено') : t('Пока пусто')}
           description={
             data[tab].length
-              ? 'Измените поисковый запрос или фильтры.'
-              : 'Добавьте первую запись с помощью кнопки выше.'
+              ? t('Измените поисковый запрос или фильтры.')
+              : t('Добавьте первую запись с помощью кнопки выше.')
           }
         />
       ) : (
@@ -1020,7 +1045,7 @@ export function PeoplePage() {
                   <Person user={user} />
                 </td>
                 <td>{user.email}</td>
-                <td>{roles[user.role]}</td>
+                <td>{t(roles[user.role])}</td>
                 <td>{editButton('users', user)}</td>
               </tr>
             ))}
@@ -1051,9 +1076,13 @@ export function PeoplePage() {
         </Table>
       )}
       {count > 0 && (
-        <nav className="directory-pagination" aria-label="Страницы справочника">
+        <nav className="directory-pagination" aria-label={t('Страницы справочника')}>
           <span className="muted" role="status">
-            Записи {start + 1}–{Math.min(start + pageSize, count)} из {count}
+            {t('Записи {start}–{end} из {count}', {
+              start: start + 1,
+              end: Math.min(start + pageSize, count),
+              count,
+            })}
           </span>
           <div>
             <button
@@ -1062,10 +1091,10 @@ export function PeoplePage() {
               disabled={currentPage === 0}
               onClick={() => setPage(currentPage - 1)}
             >
-              Назад
+              {t('Назад')}
             </button>
             <span>
-              Страница {currentPage + 1} из {lastPage + 1}
+              {t('Страница {page} из {total}', { page: currentPage + 1, total: lastPage + 1 })}
             </span>
             <button
               type="button"
@@ -1073,7 +1102,7 @@ export function PeoplePage() {
               disabled={currentPage === lastPage}
               onClick={() => setPage(currentPage + 1)}
             >
-              Далее
+              {t('Далее')}
             </button>
           </div>
         </nav>

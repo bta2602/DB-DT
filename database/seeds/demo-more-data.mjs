@@ -1,3 +1,4 @@
+import { journalGrades } from './journal-grades.mjs';
 import { cleanSeedSnapshot } from './clean-records.mjs';
 
 /** Additional fictional records. This factory never writes to storage or changes its input. */
@@ -381,7 +382,7 @@ export function createMoreDemoData(now = new Date(), existing) {
             `demo-answer-${assignmentIndex + 1}-${index + 1}.${pair.theme === 'db' ? 'sql' : 'txt'}`,
             text,
           ),
-          grade: status === 'reviewed' ? [5, 4, 3][(assignmentIndex + index) % 3] : null,
+          grade: status === 'reviewed' ? [100, 80, 60][(assignmentIndex + index) % 3] : null,
           comment:
             status === 'revision'
               ? 'Добавьте проверку граничного случая и поясните полученный результат.'
@@ -417,7 +418,7 @@ export function createMoreDemoData(now = new Date(), existing) {
           grades.push({
             lessonId: lesson.id,
             studentId: student.id,
-            grade: [5, 4, 4, 3, 5, 2][(lessonIndex + index) % 6],
+            grade: [100, 80, 80, 60, 100, 40][(lessonIndex + index) % 6],
             version: 1,
           });
       });
@@ -466,7 +467,7 @@ export function createMoreDemoData(now = new Date(), existing) {
       lessons,
       assignments,
       submissions,
-      grades,
+      grades: journalGrades(grades, attendance),
       attendance,
       materials,
       announcements,

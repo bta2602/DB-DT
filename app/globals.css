@@ -1,9 +1,178 @@
 /* React / Next.js elements share the established StudyHUB design. */
-.auth-mode-switch a { text-align: center; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
-.auth-mode-switch a.active { background: white; color: var(--green); box-shadow: 0 1px 4px #244d4210; }
-.guest-about { max-width: 1160px; margin: auto; padding: 40px 24px; }
-.studyhub-dialog { width: min(660px, calc(100% - 32px)); max-height: 90dvh; border: 1px solid var(--line); border-radius: 16px; padding: 0; color: var(--ink); box-shadow: var(--shadow); }
-.studyhub-dialog::backdrop { background: #142f2870; backdrop-filter: blur(3px); }
-.studyhub-dialog .publication-dialog-body { overflow-y: auto; }
-.nav-item { text-decoration: none; }
-.mobile-nav-shade { border: 0; }
+.auth-mode-switch a {
+  text-align: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.auth-mode-switch a.active {
+  background: white;
+  color: var(--green);
+  box-shadow: 0 1px 4px #244d4210;
+}
+.guest-about {
+  max-width: 1160px;
+  margin: auto;
+  padding: 40px 24px;
+}
+.studyhub-dialog {
+  width: min(660px, calc(100% - 32px));
+  max-height: 90dvh;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.studyhub-dialog::backdrop {
+  background: #142f2870;
+  backdrop-filter: blur(3px);
+}
+.studyhub-dialog .publication-dialog-body {
+  overflow-y: auto;
+}
+.nav-item {
+  text-decoration: none;
+}
+.mobile-nav-shade {
+  border: 0;
+}
+
+/* Кнопки демонстрации общие для страницы входа и личного кабинета. */
+.demo-role-control {
+  padding: 18px;
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.demo-role-label {
+  display: block;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.demo-role-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.demo-role-button {
+  flex: 1;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.demo-role-button:hover {
+  border-color: var(--green);
+}
+.demo-role-button[aria-pressed='true'] {
+  color: white;
+  border-color: var(--green);
+  background: var(--green);
+}
+.demo-role-description {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.demo-role-error {
+  margin-top: 10px;
+  color: var(--red);
+  font-size: 12px;
+}
+.demo-role-control.compact {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.demo-role-control.compact .demo-role-label {
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+.demo-role-control.compact .demo-role-button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.route-state {
+  min-height: 65vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  padding: 40px 24px;
+}
+.route-state p {
+  max-width: 480px;
+  color: var(--muted);
+}
+.topbar {
+  min-height: 82px;
+  height: auto;
+  gap: 12px;
+}
+.top-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.studyhub-dialog {
+  overscroll-behavior: contain;
+}
+@media (max-width: 720px) {
+  .sidebar {
+    visibility: hidden;
+  }
+  .sidebar.open {
+    visibility: visible;
+  }
+  .section-head,
+  .actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .topbar {
+    align-items: flex-start;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .topbar .breadcrumb {
+    display: none;
+  }
+  .demo-role-control.compact .demo-role-button {
+    min-height: 36px;
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+  .top-actions {
+    gap: 6px;
+  }
+  .top-actions .demo-role-control {
+    flex-basis: 100%;
+  }
+  .topbar .icon-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .demo-role-control {
+    padding: 14px;
+  }
+  .demo-role-button {
+    min-height: 44px;
+  }
+}

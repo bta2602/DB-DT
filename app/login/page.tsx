@@ -1,5 +1,13 @@
 import { StudyHubApp } from '@/components/studyhub/studyhub-app';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { readSession } from '@/lib/studyhub/auth-store.mjs';
 
 export const metadata = { title: 'StudyHUB · Вход' };
 
-export default function Page() { return <StudyHubApp section="login" />; }
+export default async function Page() {
+  const token = (await cookies()).get('studyhub_session')?.value;
+  const user = token ? readSession(token)?.user : null;
+  if (user) redirect(user.role === 'admin' ? '/overview' : '/today');
+  return <StudyHubApp section="login" />;
+}

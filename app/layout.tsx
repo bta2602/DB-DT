@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import { StudyHubProvider } from '@/components/studyhub/context';
-import { TeacherWorkspaceProvider } from '@/components/studyhub/teacher-pages';
-import { bootstrapFor, readSession } from '@/lib/studyhub/auth-store.mjs';
+import { TeacherWorkspaceProvider } from '@/components/studyhub/teacher-context';
+import { bootstrapFor, isDemoEnabled, readSession } from '@/lib/studyhub/auth-store.mjs';
 import { emptyData } from '@/lib/studyhub/client-utils';
 import type { Bootstrap, Session } from '@/lib/studyhub/api-contract';
+import './styles/tokens.css';
 import './styles/styles.css';
 import './styles/teacher.css';
 import './styles/admin.css';
@@ -23,9 +24,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const cookieStore = await cookies();
   const token = cookieStore.get('studyhub_session')?.value;
   const stored = token ? readSession(token) : null;
-  const initialSession = stored ? { user: stored.user, csrfToken: stored.csrfToken } as Session : null;
-  const initialData: Bootstrap = stored?.user ? JSON.parse(JSON.stringify(bootstrapFor(stored.user))) : emptyData();
+  const initialSession = stored
+    ? ({ user: stored.user, csrfToken: stored.csrfToken, demoEnabled: isDemoEnabled() } as Session)
+    : null;
+  const initialData: Bootstrap = stored?.user
+    ? JSON.parse(JSON.stringify(bootstrapFor(stored.user)))
+    : emptyData();
   // eslint-disable-next-line react-hooks/purity -- A single request-time clock snapshot is serialized for identical SSR and hydration.
   const initialNow = Date.now();
-  return <html lang="ru"><body><a className="skip" href="#main">Перейти к содержимому</a><StudyHubProvider initialSession={initialSession} initialData={initialData} initialNow={initialNow}><TeacherWorkspaceProvider>{children}</TeacherWorkspaceProvider></StudyHubProvider><noscript>Для работы StudyHUB включите JavaScript в браузере.</noscript></body></html>;
+  return (
+    <html lang="ru">
+      <body>
+        <a className="skip" href="#main">
+          Перейти к содержимому
+        </a>
+        <StudyHubProvider
+          initialSession={initialSession}
+          initialData={initialData}
+          initialNow={initialNow}
+        >
+          <TeacherWorkspaceProvider>{children}</TeacherWorkspaceProvider>
+        </StudyHubProvider>
+        <noscript>Для работы StudyHUB включите JavaScript в браузере.</noscript>
+      </body>
+    </html>
+  );
 }

@@ -5,6 +5,13 @@ import { useState, type FormEvent } from 'react';
 import type { Assignment, Bootstrap, Submission, User } from '@/lib/studyhub/api-contract';
 import { allowedSubmissionExtensions, maxSubmissionBytes } from '@/lib/studyhub/api-contract';
 import {
+  deadlineFilters,
+  deadlineFlag,
+  deadlineLabels,
+  matchesDeadline,
+  type DeadlineFilter,
+} from '@/lib/studyhub/deadlines';
+import {
   average,
   dateKey,
   formatDate,
@@ -32,7 +39,8 @@ function AssignmentCards({
   onOpen: (id: string) => void;
 }) {
   const { t, locale } = useI18n();
-  const { data, user } = useStudyHub();
+  const { data, user, now } = useStudyHub();
+  const deadlineText = deadlineLabels[locale];
   if (!assignments.length)
     return (
       <EmptyState
@@ -46,6 +54,7 @@ function AssignmentCards({
         const submission = data.submissions.find(
           (item) => item.assignmentId === assignment.id && item.studentId === user?.id,
         );
+        const flag = deadlineFlag(assignment.dueAt, assignmentStatus(submission), now);
         return (
           <button
             type="button"
@@ -71,6 +80,9 @@ function AssignmentCards({
             </div>
             <h3>{assignment.title}</h3>
             <p>{assignment.type}</p>
+            {flag && (
+              <Badge kind={flag === 'overdue' ? 'red' : 'amber'}>{deadlineText[flag]}</Badge>
+            )}
             <footer>
               {submission?.status === 'reviewed'
                 ? t('Оценка {value0} из 100', { value0: String(submission.grade ?? '—') })
@@ -348,33 +360,57 @@ export function StudentToday() {
 }
 
 export function TasksPage() {
-  const { t } = useI18n();
-  const { data, user } = useStudyHub();
+  const { t, locale } = useI18n();
+  const { data, user, now } = useStudyHub();
   const [status, setStatus] = useState('all');
   const [query, setQuery] = useState('');
+  const [deadline, setDeadline] = useState<DeadlineFilter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const statuses = ['all', 'missing', 'submitted', 'revision', 'reviewed'] as const;
-  const assignments = data.assignments
-    .filter(
-      (assignment) =>
-        assignment.groupId === user?.groupId &&
-        (status === 'all' ||
-          assignmentStatus(
-            data.submissions.find(
-              (item) => item.assignmentId === assignment.id && item.studentId === user?.id,
-            ),
-          ) === status) &&
-        assignment.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
-    )
+  const deadlineText = deadlineLabels[locale];
+  const submissions = new Map(
+    data.submissions
+      .filter((item) => item.studentId === user?.id)
+      .map((item) => [item.assignmentId, item]),
+  );
+  const ownAssignments = data.assignments.filter((item) => item.groupId === user?.groupId);
+  const overdueCount = ownAssignments.filter((item) =>
+    matchesDeadline(item.dueAt, assignmentStatus(submissions.get(item.id)), 'overdue', now),
+  ).length;
+  const assignments = ownAssignments
+    .filter((item) => {
+      const workStatus = assignmentStatus(submissions.get(item.id));
+      return (
+        (status === 'all' || workStatus === status) &&
+        item.title.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)) &&
+        matchesDeadline(item.dueAt, workStatus, deadline, now)
+      );
+    })
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
-  const selected = data.assignments.find((assignment) => assignment.id === selectedId);
+  const selected = ownAssignments.find((item) => item.id === selectedId);
+  const filtering = Boolean(query.trim() || status !== 'all' || deadline !== 'all');
   return (
     <>
       <PageHeading
         title={t('Мои задания')}
         description={t('От первого шага до обратной связи преподавателя.')}
       />
+      <p className="small muted" role="status">
+        {deadlineText.count}: {overdueCount}
+      </p>
       <div className="publication-toolbar">
+        <Field label={deadlineText.title}>
+          <select
+            value={deadline}
+            onChange={(event) => setDeadline(event.target.value as DeadlineFilter)}
+          >
+            {deadlineFilters.map((item) => (
+              <option key={item} value={item}>
+                {deadlineText[item]}
+              </option>
+            ))}
+          </select>
+        </Field>
         <div className="tabs" role="group" aria-label={t('Статус задания')}>
           {statuses.map((item) => (
             <button
@@ -401,10 +437,10 @@ export function TasksPage() {
         <AssignmentCards assignments={assignments} onOpen={setSelectedId} />
       ) : (
         <EmptyState
-          title={query || status !== 'all' ? t('Задания не найдены') : t('Заданий пока нет')}
+          title={filtering ? t('Задания не найдены') : t('Заданий пока нет')}
           description={
-            query || status !== 'all'
-              ? t('Измените поисковый запрос или выбранный статус.')
+            filtering
+              ? deadlineText.empty
               : t('Новые задания появятся после публикации преподавателем.')
           }
         />

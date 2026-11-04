@@ -22,6 +22,7 @@ import {
   numericGrade,
   lessonStatus,
 } from '@/lib/studyhub/client-utils';
+import { downloadCsv } from '@/lib/studyhub/journal-csv';
 import { ApiError, useStudyHub } from './context';
 import { useI18n } from './preferences';
 import { useTeacherDrafts, type ReviewDraft } from './teacher-context';
@@ -434,6 +435,49 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
     const work = works.get(`${column.id}:${studentId}`);
     return work?.status === 'reviewed' ? work.grade : null;
   };
+  const exportLabel = {
+    ru: 'Скачать CSV',
+    kk: 'CSV жүктеу',
+    en: 'Download CSV',
+  }[locale];
+
+  function exportJournal() {
+    const rows: (string | number | null)[][] = [
+      [t('Группа'), title(data.groups, groupId)],
+      [t('Предмет'), title(data.subjects, subjectId)],
+      [
+        t('Студент'),
+        ...columns.map(
+          (column) =>
+            `${formatDate(column.date, locale)} ${formatTime(column.date)} — ${column.label}`,
+        ),
+        t('Средний балл'),
+      ],
+    ];
+
+    for (const student of visibleStudents) {
+      const marks = columns.map((column) =>
+        column.kind === 'lesson'
+          ? t(String(gradeLabel(grades.get(`${column.id}:${student.id}`))))
+          : (scoreFor(column, student.id) ?? '—'),
+      );
+
+      const mean = average(columns.map((column) => scoreFor(column, student.id)));
+
+      rows.push([
+        student.name,
+        ...marks,
+        mean === null
+          ? '—'
+          : new Intl.NumberFormat(locale, {
+              maximumFractionDigits: 1,
+            }).format(mean),
+      ]);
+    }
+
+    downloadCsv(`studyhub-journal-${dateKey(new Date(now))}.csv`, rows);
+  }
+
   const editingLesson = scope.lessons.find((lesson) => lesson.id === editing?.lessonId);
   const editingStudent = students.find((student) => student.id === editing?.studentId);
   return (
@@ -441,6 +485,16 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
       <PageHeading
         title={t('Журнал группы')}
         description={t('Оценки и отметки в одной таблице.')}
+        action={
+          <button
+            type="button"
+            className="button"
+            disabled={!columns.length || !visibleStudents.length}
+            onClick={exportJournal}
+          >
+            {exportLabel}
+          </button>
+        }
       />
       {!scope.groups.length ? (
         <EmptyState

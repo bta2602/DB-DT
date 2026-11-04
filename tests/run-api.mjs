@@ -95,6 +95,7 @@ try {
     [
       '--test',
       '--test-reporter=spec',
+      'tests/deadlines.test.mjs',
       'tests/grading.test.mjs',
       'tests/i18n.test.mjs',
       'tests/storage.test.mjs',

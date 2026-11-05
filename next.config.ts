@@ -1,21 +1,22 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   devIndicators: false,
   outputFileTracingExcludes: { '/*': ['./.studyhub/**/*', './.git/**/*'] },
   async redirects() {
     return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'studyhub-db-dt.vercel.app' }],
+        destination: 'https://studyhub-kz.vercel.app/:path*',
+        permanent: true,
+      },
       { source: '/studyhub/index.html', destination: '/', permanent: false },
       { source: '/studyhub', destination: '/', permanent: false },
     ];
   },
   turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
+    root: process.cwd(),
   },
 };
 

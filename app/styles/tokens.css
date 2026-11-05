@@ -18,8 +18,8 @@
   --red: #9c3d31;
   --red-bg: #f9eeea;
 
-  --font-sans: Inter, "Segoe UI", Arial, sans-serif;
-  --font-mono: Consolas, "Courier New", monospace;
+  --font-sans: Inter, 'Segoe UI', Arial, sans-serif;
+  --font-mono: Consolas, 'Courier New', monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
@@ -58,7 +58,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;

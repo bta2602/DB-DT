@@ -1,9 +1,297 @@
 /* React / Next.js elements share the established StudyHUB design. */
-.auth-mode-switch a { text-align: center; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
-.auth-mode-switch a.active { background: white; color: var(--green); box-shadow: 0 1px 4px #244d4210; }
-.guest-about { max-width: 1160px; margin: auto; padding: 40px 24px; }
-.studyhub-dialog { width: min(660px, calc(100% - 32px)); max-height: 90dvh; border: 1px solid var(--line); border-radius: 16px; padding: 0; color: var(--ink); box-shadow: var(--shadow); }
-.studyhub-dialog::backdrop { background: #142f2870; backdrop-filter: blur(3px); }
-.studyhub-dialog .publication-dialog-body { overflow-y: auto; }
-.nav-item { text-decoration: none; }
-.mobile-nav-shade { border: 0; }
+.auth-mode-switch a {
+  text-align: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.auth-mode-switch a.active {
+  background: white;
+  color: var(--green);
+  box-shadow: 0 1px 4px #244d4210;
+}
+.guest-about {
+  max-width: 1160px;
+  margin: auto;
+  padding: 40px 24px;
+}
+.studyhub-dialog {
+  width: min(660px, calc(100% - 32px));
+  max-height: 90dvh;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.studyhub-dialog::backdrop {
+  background: #142f2870;
+  backdrop-filter: blur(3px);
+}
+.studyhub-dialog .publication-dialog-body {
+  overflow-y: auto;
+}
+.nav-item {
+  text-decoration: none;
+}
+.mobile-nav-shade {
+  border: 0;
+}
+
+/* Выбор роли на странице входа и в окне аккаунта. */
+.role-control {
+  padding: 18px;
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.role-control-label {
+  display: block;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.role-control-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.role-control-button {
+  flex: 1;
+  min-width: 110px;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.role-control-button:hover {
+  border-color: var(--green);
+}
+.role-control-button[aria-pressed='true'] {
+  color: white;
+  border-color: var(--green);
+  background: var(--green);
+}
+.role-control-description {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.role-control-error {
+  margin-top: 10px;
+  color: var(--red);
+  font-size: 12px;
+}
+.sidebar {
+  height: 100dvh;
+  min-height: 0;
+  padding-bottom: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sidebar > * {
+  flex-shrink: 0;
+}
+.sidebar .nav-list {
+  min-height: 0;
+  flex-shrink: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sidebar .nav-list .nav-item {
+  flex-shrink: 0;
+}
+.sidebar .nav-list .nav-item:focus-visible {
+  outline-offset: -3px;
+}
+.sidebar .sidebar-spacer {
+  min-height: 12px;
+}
+.sidebar .profile-btn {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 100%;
+  border-radius: 0;
+  padding: 16px 10px max(16px, env(safe-area-inset-bottom));
+  background: white;
+  color: inherit;
+}
+.sidebar .profile-btn:hover {
+  color: var(--green);
+}
+.account-dialog {
+  width: min(440px, calc(100% - 32px));
+}
+.account-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.account-summary > div {
+  min-width: 0;
+}
+.account-summary h3 {
+  font-size: 18px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.account-avatar {
+  width: 54px;
+  height: 54px;
+  font-size: 17px;
+}
+.account-role {
+  margin-top: 5px;
+  color: var(--green);
+  font-size: 12px;
+}
+.account-email {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.account-profile-link {
+  min-height: 44px;
+}
+.account-profile-link[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: wait;
+}
+.role-control.in-account {
+  margin-top: 22px;
+  padding: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.role-control.in-account .role-control-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.role-control.in-account .role-control-button {
+  min-height: 44px;
+  text-align: left;
+  padding: 12px 14px;
+}
+.role-control.in-account .role-control-button[aria-pressed='true']::after {
+  content: '✓';
+  float: right;
+}
+.account-actions {
+  margin-top: 22px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.account-actions .button {
+  min-height: 44px;
+}
+.route-state {
+  min-height: 65vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  padding: 40px 24px;
+}
+.route-state p {
+  max-width: 480px;
+  color: var(--muted);
+}
+.topbar {
+  min-height: 82px;
+  height: auto;
+  gap: 12px;
+}
+.top-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.studyhub-dialog {
+  overscroll-behavior: contain;
+}
+@media (max-height: 800px) {
+  .sidebar {
+    padding-top: 22px;
+  }
+  .sidebar .workspace {
+    margin-top: 22px;
+    margin-bottom: 20px;
+  }
+  .sidebar .sidebar-note {
+    display: none;
+  }
+}
+@media (max-height: 540px) {
+  .sidebar {
+    padding-top: 12px;
+  }
+  .sidebar .brand {
+    margin-bottom: 14px;
+  }
+  .sidebar .workspace,
+  .sidebar .nav-label,
+  .sidebar .sidebar-spacer {
+    display: none;
+  }
+  .sidebar .nav-list {
+    flex: 1 1 auto;
+  }
+  .sidebar .profile-btn {
+    padding-top: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 720px) {
+  .sidebar {
+    visibility: hidden;
+  }
+  .sidebar.open {
+    visibility: visible;
+  }
+  .section-head,
+  .actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .topbar {
+    align-items: flex-start;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .topbar .breadcrumb {
+    display: none;
+  }
+  .top-actions {
+    gap: 6px;
+  }
+  .topbar .icon-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .role-control {
+    padding: 14px;
+  }
+  .role-control-button {
+    min-height: 44px;
+  }
+}

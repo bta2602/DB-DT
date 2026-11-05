@@ -1,13 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  AuthError, bootstrapFor, createGuestSession, matchesCsrf, readSession,
-  registerStudent, saveDirectory, saveLesson, signIn, signOut, updateOwnProfile,
-  readLearningFile, reviewSubmission, saveAssignment, saveAttendance, saveGrade, saveSubmission,
+  AuthError,
+  bootstrapFor,
+  createGuestSession,
+  matchesCsrf,
+  readSession,
+  registerStudent,
+  saveDirectory,
+  saveLesson,
+  signIn,
+  signOut,
+  updateOwnProfile,
+  readLearningFile,
+  reviewSubmission,
+  saveAssignment,
+  saveAttendance,
+  saveGrade,
+  saveSubmission,
+  isDemoEnabled,
+  signInDemo,
+  saveMaterial,
+  deleteMaterial,
+  saveAnnouncement,
+  deleteAnnouncement,
 } from './auth-store.mjs';
+import { maxSubmissionBytes } from './api-contract';
+import { databaseErrorInfo } from '../../database/connection.mjs';
 
 const COOKIE = 'studyhub_session';
 const BODY_LIMIT = 16 * 1024;
-type StoredSession = NonNullable<ReturnType<typeof readSession>>;
+type StoredSession = NonNullable<Awaited<ReturnType<typeof readSession>>>;
 
 function expectedOrigin(request: NextRequest) {
   const configured = process.env.STUDYHUB_ORIGIN;
@@ -15,18 +37,37 @@ function expectedOrigin(request: NextRequest) {
   // NextRequest can normalize 127.0.0.1 to localhost. Preserve the browser's
   // actual authority from Host; forwarded headers are intentionally ignored.
   const host = request.headers.get('host');
-  if (!configured && (!host || !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/i.test(host))) {
-    throw new AuthError(503, 'ORIGIN_NOT_CONFIGURED', 'Для этого адреса требуется настройка HTTPS и STUDYHUB_ORIGIN на сервере.');
+  if (
+    !configured &&
+    (!host || !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/i.test(host))
+  ) {
+    throw new AuthError(
+      503,
+      'ORIGIN_NOT_CONFIGURED',
+      'Для этого адреса требуется настройка HTTPS и STUDYHUB_ORIGIN на сервере.',
+    );
   }
   let origin: URL;
   try {
     origin = new URL(configured || `${incoming.protocol}//${host}`);
   } catch {
-    throw new AuthError(503, 'ORIGIN_NOT_CONFIGURED', 'Некорректный адрес сервера. Проверьте STUDYHUB_ORIGIN.');
+    throw new AuthError(
+      503,
+      'ORIGIN_NOT_CONFIGURED',
+      'Некорректный адрес сервера. Проверьте STUDYHUB_ORIGIN.',
+    );
   }
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
-  if ((!configured && !local) || (origin.protocol !== 'https:' && !local) || !['http:', 'https:'].includes(origin.protocol)) {
-    throw new AuthError(503, 'ORIGIN_NOT_CONFIGURED', 'Для этого адреса требуется настройка HTTPS и STUDYHUB_ORIGIN на сервере.');
+  if (
+    (!configured && !local) ||
+    (origin.protocol !== 'https:' && !local) ||
+    !['http:', 'https:'].includes(origin.protocol)
+  ) {
+    throw new AuthError(
+      503,
+      'ORIGIN_NOT_CONFIGURED',
+      'Для этого адреса требуется настройка HTTPS и STUDYHUB_ORIGIN на сервере.',
+    );
   }
   return origin.origin;
 }
@@ -38,10 +79,18 @@ function json(value: unknown, status = 200) {
   return response;
 }
 
-function writeCookie(response: NextResponse, request: NextRequest, token: string, expiresAt: number) {
+function writeCookie(
+  response: NextResponse,
+  request: NextRequest,
+  token: string,
+  expiresAt: number,
+) {
   response.cookies.set(COOKIE, token, {
-    httpOnly: true, sameSite: 'lax', secure: expectedOrigin(request).startsWith('https:'),
-    path: '/', expires: new Date(expiresAt),
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: expectedOrigin(request).startsWith('https:'),
+    path: '/',
+    expires: new Date(expiresAt),
   });
   return response;
 }
@@ -52,37 +101,66 @@ async function execute(request: NextRequest, action: () => NextResponse | Promis
     return await action();
   } catch (error) {
     if (error instanceof AuthError) {
-      const response = json({ error: { code: error.code, message: error.message, fields: error.fields } }, error.status);
+      const response = json(
+        { error: { code: error.code, message: error.message, fields: error.fields } },
+        error.status,
+      );
       if (error.retryAfter) response.headers.set('Retry-After', String(error.retryAfter));
       return response;
     }
-    console.error('[StudyHUB auth] Request failed:', error instanceof Error ? error.name : 'UnknownError');
-    return json({ error: { code: 'INTERNAL_ERROR', message: 'Не удалось выполнить запрос. Повторите попытку позже.' } }, 500);
+    console.error('[StudyHUB auth] Request failed:', databaseErrorInfo(error));
+    return json(
+      {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Не удалось выполнить запрос. Повторите попытку позже.',
+        },
+      },
+      500,
+    );
   }
 }
 
-function currentSession(request: NextRequest, requireUser = false): StoredSession {
-  const session = readSession(request.cookies.get(COOKIE)?.value || '');
-  if (!session || (requireUser && !session.user)) throw new AuthError(401, 'UNAUTHENTICATED', 'Войдите в аккаунт, чтобы продолжить.');
+async function currentSession(request: NextRequest, requireUser = false): Promise<StoredSession> {
+  const session = await readSession(request.cookies.get(COOKIE)?.value || '');
+  if (!session || (requireUser && !session.user))
+    throw new AuthError(401, 'UNAUTHENTICATED', 'Войдите в аккаунт, чтобы продолжить.');
   return session;
 }
 
-function mutationSession(request: NextRequest, requireUser = false) {
-  if (request.headers.get('origin') !== expectedOrigin(request) || request.headers.get('sec-fetch-site') === 'cross-site') {
-    throw new AuthError(403, 'INVALID_ORIGIN', 'Запрос отклонён. Откройте StudyHUB в этом браузере и повторите действие.');
+async function mutationSession(request: NextRequest, requireUser = false) {
+  if (
+    request.headers.get('origin') !== expectedOrigin(request) ||
+    request.headers.get('sec-fetch-site') === 'cross-site'
+  ) {
+    throw new AuthError(
+      403,
+      'INVALID_ORIGIN',
+      'Запрос отклонён. Откройте StudyHUB в этом браузере и повторите действие.',
+    );
   }
-  const session = currentSession(request, requireUser);
+  const session = await currentSession(request, requireUser);
   if (!matchesCsrf(request.headers.get('x-csrf-token') || '', session.csrfToken)) {
-    throw new AuthError(403, 'INVALID_CSRF', 'Сессия формы устарела. Обновите страницу и повторите действие.');
+    throw new AuthError(
+      403,
+      'INVALID_CSRF',
+      'Сессия формы устарела. Обновите страницу и повторите действие.',
+    );
   }
   return session;
 }
 
-async function body(request: NextRequest, allowedFields: string[]): Promise<Record<string, unknown>> {
-  if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
+async function body(
+  request: NextRequest,
+  allowedFields: string[],
+): Promise<Record<string, unknown>> {
+  if (
+    request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json'
+  ) {
     throw new AuthError(415, 'JSON_REQUIRED', 'Ожидается запрос в формате JSON.');
   }
-  if (Number(request.headers.get('content-length') || 0) > BODY_LIMIT) throw new AuthError(413, 'BODY_TOO_LARGE', 'Слишком большой запрос.');
+  if (Number(request.headers.get('content-length') || 0) > BODY_LIMIT)
+    throw new AuthError(413, 'BODY_TOO_LARGE', 'Слишком большой запрос.');
   const reader = request.body?.getReader();
   if (!reader) throw new AuthError(422, 'INVALID_BODY', 'Заполните поля формы.');
   const chunks: Uint8Array[] = [];
@@ -107,61 +185,105 @@ async function body(request: NextRequest, allowedFields: string[]): Promise<Reco
   } catch {
     throw new AuthError(422, 'INVALID_JSON', 'Не удалось прочитать поля формы.');
   }
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !allowedFields.includes(key))) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).some((key) => !allowedFields.includes(key))
+  ) {
     throw new AuthError(422, 'INVALID_BODY', 'В запросе есть неподдерживаемые поля.');
   }
   return value as Record<string, unknown>;
 }
 
 export function getSession(request: NextRequest) {
-  return execute(request, () => {
-    const existing = readSession(request.cookies.get(COOKIE)?.value || '');
-    const session = existing || createGuestSession();
-    const response = json({ user: session.user, csrfToken: session.csrfToken });
+  return execute(request, async () => {
+    const existing = await readSession(request.cookies.get(COOKIE)?.value || '');
+    const session = existing || (await createGuestSession());
+    const response = json({
+      user: session.user,
+      csrfToken: session.csrfToken,
+      demoEnabled: await isDemoEnabled(),
+    });
     return existing ? response : writeCookie(response, request, session.token, session.expiresAt);
+  });
+}
+
+export function demoLogin(request: NextRequest) {
+  return execute(request, async () => {
+    if (!(await isDemoEnabled()))
+      throw new AuthError(404, 'DEMO_DISABLED', 'Учебный доступ отключён.');
+    const previous = await mutationSession(request);
+    const input = await body(request, ['role']);
+    const session = await signInDemo(input.role, previous.token);
+    return writeCookie(
+      json({ ok: true, csrfToken: session.csrfToken, demoEnabled: true }),
+      request,
+      session.token,
+      session.expiresAt,
+    );
   });
 }
 
 export function login(request: NextRequest) {
   return execute(request, async () => {
-    const previous = mutationSession(request);
+    const previous = await mutationSession(request);
     const input = await body(request, ['email', 'password']);
     const session = await signIn({ email: input.email, password: input.password }, previous.token);
-    return writeCookie(json({ ok: true, csrfToken: session.csrfToken }), request, session.token, session.expiresAt);
+    return writeCookie(
+      json({ ok: true, csrfToken: session.csrfToken }),
+      request,
+      session.token,
+      session.expiresAt,
+    );
   });
 }
 
 export function register(request: NextRequest) {
   return execute(request, async () => {
-    const previous = mutationSession(request);
-    if (previous.user) throw new AuthError(409, 'ALREADY_SIGNED_IN', 'Сначала выйдите из текущего аккаунта.');
+    const previous = await mutationSession(request);
+    if (previous.user)
+      throw new AuthError(409, 'ALREADY_SIGNED_IN', 'Сначала выйдите из текущего аккаунта.');
     const input = await body(request, ['name', 'email', 'password', 'passwordConfirmation']);
-    const session = await registerStudent({ name: input.name, email: input.email, password: input.password, passwordConfirmation: input.passwordConfirmation }, previous.token);
-    return writeCookie(json({ ok: true, csrfToken: session.csrfToken }), request, session.token, session.expiresAt);
+    const session = await registerStudent(
+      {
+        name: input.name,
+        email: input.email,
+        password: input.password,
+        passwordConfirmation: input.passwordConfirmation,
+      },
+      previous.token,
+    );
+    return writeCookie(
+      json({ ok: true, csrfToken: session.csrfToken }),
+      request,
+      session.token,
+      session.expiresAt,
+    );
   });
 }
 
 export function logout(request: NextRequest) {
   return execute(request, async () => {
-    const session = mutationSession(request);
+    const session = await mutationSession(request);
     await body(request, []);
-    signOut(session.token);
+    await signOut(session.token);
     return writeCookie(json({ ok: true }), request, '', 0);
   });
 }
 
 export function bootstrap(request: NextRequest) {
-  return execute(request, () => {
-    const session = currentSession(request, true);
-    return json(bootstrapFor(session.user!));
+  return execute(request, async () => {
+    const session = await currentSession(request, true);
+    return json(await bootstrapFor(session.user!));
   });
 }
 
 export function updateProfile(request: NextRequest) {
   return execute(request, async () => {
-    const session = mutationSession(request, true);
+    const session = await mutationSession(request, true);
     const input = await body(request, ['name', 'version']);
-    updateOwnProfile(session.user!.id, input.name, input.version);
+    await updateOwnProfile(session.user!.id, input.name, input.version);
     return json({ ok: true });
   });
 }
@@ -175,17 +297,21 @@ const directoryFields: Record<DirectoryKind, string[]> = {
   'teaching-assignments': ['teacherId', 'groupId', 'subjectId'],
 };
 
-function adminSession(request: NextRequest) {
-  const session = mutationSession(request, true);
+async function adminSession(request: NextRequest) {
+  const session = await mutationSession(request, true);
   if (session.user!.role !== 'admin') {
-    throw new AuthError(403, 'ADMIN_REQUIRED', 'Управлять справочниками и расписанием может только администратор.');
+    throw new AuthError(
+      403,
+      'ADMIN_REQUIRED',
+      'Управлять справочниками и расписанием может только администратор.',
+    );
   }
   return session;
 }
 
 export function directoryMutation(request: NextRequest, kind: DirectoryKind, id = '') {
   return execute(request, async () => {
-    const session = adminSession(request);
+    const session = await adminSession(request);
     const fields = [...directoryFields[kind]];
     if (id) fields.push('version');
     else if (kind === 'users') fields.push('password');
@@ -196,8 +322,18 @@ export function directoryMutation(request: NextRequest, kind: DirectoryKind, id 
 
 export function lessonMutation(request: NextRequest, id = '') {
   return execute(request, async () => {
-    const session = adminSession(request);
-    const fields = ['subjectId', 'groupId', 'teacherId', 'roomId', 'startsAt', 'endsAt', 'kind', 'note', 'status'];
+    const session = await adminSession(request);
+    const fields = [
+      'subjectId',
+      'groupId',
+      'teacherId',
+      'roomId',
+      'startsAt',
+      'endsAt',
+      'kind',
+      'note',
+      'status',
+    ];
     if (id) fields.push('version');
     const input = await body(request, fields);
     return json(await saveLesson(session.user!, input, id));
@@ -206,47 +342,56 @@ export function lessonMutation(request: NextRequest, id = '') {
 
 export function gradeMutation(request: NextRequest, lessonId: string, studentId: string) {
   return execute(request, async () => {
-    const session = mutationSession(request, true);
-    const input = await body(request, ['grade', 'version']);
-    return json(saveGrade(session.user!, lessonId, studentId, input));
+    const session = await mutationSession(request, true);
+    const input = await body(request, ['grade', 'status', 'version']);
+    return json(await saveGrade(session.user!, lessonId, studentId, input));
   });
 }
 
 export function attendanceMutation(request: NextRequest, lessonId: string) {
   return execute(request, async () => {
-    const session = mutationSession(request, true);
+    const session = await mutationSession(request, true);
     const input = await body(request, ['entries', 'version']);
-    return json(saveAttendance(session.user!, lessonId, input));
+    return json(await saveAttendance(session.user!, lessonId, input));
   });
 }
 
 export function reviewMutation(request: NextRequest, id: string) {
   return execute(request, async () => {
-    const session = mutationSession(request, true);
+    const session = await mutationSession(request, true);
     const input = await body(request, ['action', 'grade', 'comment', 'version']);
-    return json(reviewSubmission(session.user!, id, input));
+    return json(await reviewSubmission(session.user!, id, input));
   });
 }
 
 export function assignmentMutation(request: NextRequest) {
   return execute(request, async () => {
-    const session = mutationSession(request, true);
-    const input = await body(request, ['title', 'description', 'steps', 'type', 'groupId', 'subjectId', 'teacherId', 'dueAt']);
-    return json(saveAssignment(session.user!, input));
+    const session = await mutationSession(request, true);
+    const input = await body(request, [
+      'title',
+      'description',
+      'steps',
+      'type',
+      'groupId',
+      'subjectId',
+      'teacherId',
+      'dueAt',
+    ]);
+    return json(await saveAssignment(session.user!, input));
   });
 }
 
 export function learningFile(request: NextRequest, id: string) {
-  return execute(request, () => {
-    const session = currentSession(request, true);
-    const file = readLearningFile(session.user!, id);
+  return execute(request, async () => {
+    const session = await currentSession(request, true);
+    const file = await readLearningFile(session.user!, id);
     return new NextResponse(new Uint8Array(file.bytes), {
       headers: {
         'Content-Type': file.mimeType,
         'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
         'Content-Length': String(file.bytes.byteLength),
         'Cache-Control': 'private, no-store',
-        'Vary': 'Cookie',
+        Vary: 'Cookie',
         'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': 'sandbox',
       },
@@ -254,44 +399,113 @@ export function learningFile(request: NextRequest, id: string) {
   });
 }
 
+async function uploadedForm(request: NextRequest, allowedFields: string[]) {
+  const contentType = request.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().startsWith('multipart/form-data;'))
+    throw new AuthError(415, 'FILE_REQUIRED', 'Выберите файл работы.');
+  const limit = maxSubmissionBytes + 64 * 1024;
+  if (Number(request.headers.get('content-length')) > limit)
+    throw new AuthError(
+      413,
+      'FILE_TOO_LARGE',
+      `Файл больше ${maxSubmissionBytes / (1024 * 1024)} МБ.`,
+    );
+  const reader = request.body?.getReader();
+  if (!reader) throw new AuthError(422, 'FILE_REQUIRED', 'Выберите файл работы.');
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) break;
+      length += result.value.byteLength;
+      if (length > limit) {
+        await reader.cancel();
+        throw new AuthError(
+          413,
+          'FILE_TOO_LARGE',
+          `Файл больше ${maxSubmissionBytes / (1024 * 1024)} МБ.`,
+        );
+      }
+      chunks.push(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  let form: FormData;
+  try {
+    form = await new Response(Buffer.concat(chunks), {
+      headers: { 'Content-Type': contentType },
+    }).formData();
+  } catch {
+    throw new AuthError(422, 'INVALID_UPLOAD', 'Не удалось прочитать файл. Выберите его ещё раз.');
+  }
+  const file = form.get('file');
+  const keys = Array.from(form.keys());
+  if (
+    keys.some((key) => !allowedFields.includes(key)) ||
+    new Set(keys).size !== keys.length ||
+    !(file instanceof File) ||
+    !file.size
+  ) {
+    throw new AuthError(422, 'FILE_REQUIRED', 'Выберите один непустой файл работы.');
+  }
+  return {
+    form,
+    file: {
+      name: file.name,
+      mimeType: file.type,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    },
+  };
+}
+
 export function submissionMutation(request: NextRequest, assignmentId: string) {
   return execute(request, async () => {
-    const session = mutationSession(request, true);
-    if (session.user!.role !== 'student') throw new AuthError(403, 'STUDENT_REQUIRED', 'Сдавать работу может только студент.');
-    const contentType = request.headers.get('content-type') || '';
-    if (!contentType.toLowerCase().startsWith('multipart/form-data;')) throw new AuthError(415, 'FILE_REQUIRED', 'Выберите файл работы.');
-    const limit = 20 * 1024 * 1024 + 64 * 1024;
-    if (Number(request.headers.get('content-length')) > limit) throw new AuthError(413, 'FILE_TOO_LARGE', 'Файл больше 20 МБ.');
-    const reader = request.body?.getReader();
-    if (!reader) throw new AuthError(422, 'FILE_REQUIRED', 'Выберите файл работы.');
-    const chunks: Uint8Array[] = [];
-    let length = 0;
-    try {
-      for (;;) {
-        const result = await reader.read();
-        if (result.done) break;
-        length += result.value.byteLength;
-        if (length > limit) {
-          await reader.cancel();
-          throw new AuthError(413, 'FILE_TOO_LARGE', 'Файл больше 20 МБ.');
-        }
-        chunks.push(result.value);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-    let form: FormData;
-    try {
-      form = await new Response(Buffer.concat(chunks), { headers: { 'Content-Type': contentType } }).formData();
-    } catch {
-      throw new AuthError(422, 'INVALID_UPLOAD', 'Не удалось прочитать файл. Выберите его ещё раз.');
-    }
-    const file = form.get('file');
-    if (Array.from(form.keys()).length !== 1 || !(file instanceof File) || !file.size) {
-      throw new AuthError(422, 'FILE_REQUIRED', 'Выберите один непустой файл работы.');
-    }
-    return json(saveSubmission(session.user!, assignmentId, {
-      name: file.name, mimeType: file.type, bytes: new Uint8Array(await file.arrayBuffer()),
-    }));
+    const session = await mutationSession(request, true);
+    if (session.user!.role !== 'student')
+      throw new AuthError(403, 'STUDENT_REQUIRED', 'Сдавать работу может только студент.');
+    const upload = await uploadedForm(request, ['file']);
+    return json(await saveSubmission(session.user!, assignmentId, upload.file));
+  });
+}
+
+export function materialMutation(request: NextRequest) {
+  return execute(request, async () => {
+    const session = await mutationSession(request, true);
+    if (session.user!.role !== 'teacher')
+      throw new AuthError(403, 'TEACHER_REQUIRED', 'Материалы публикует преподаватель предмета.');
+    const upload = await uploadedForm(request, ['file', 'title', 'subjectId']);
+    return json(
+      await saveMaterial(
+        session.user!,
+        { title: upload.form.get('title'), subjectId: upload.form.get('subjectId') },
+        upload.file,
+      ),
+    );
+  });
+}
+
+export function materialDeletion(request: NextRequest, id: string) {
+  return execute(request, async () => {
+    const session = await mutationSession(request, true);
+    await body(request, []);
+    return json(await deleteMaterial(session.user!, id));
+  });
+}
+
+export function announcementMutation(request: NextRequest) {
+  return execute(request, async () => {
+    const session = await adminSession(request);
+    const input = await body(request, ['title', 'body']);
+    return json(await saveAnnouncement(session.user!, input));
+  });
+}
+
+export function announcementDeletion(request: NextRequest, id: string) {
+  return execute(request, async () => {
+    const session = await adminSession(request);
+    await body(request, []);
+    return json(await deleteAnnouncement(session.user!, id));
   });
 }

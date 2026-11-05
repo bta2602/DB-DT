@@ -7,25 +7,31 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "admin:create": "node scripts/create-admin.mjs",
-    "demo:seed": "node scripts/seed-demo.mjs"
+    "admin:create": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
+    "demo:seed": "node --env-file-if-exists=.env.local scripts/seed-demo.mjs",
+    "demo:setup": "node scripts/setup-demo.mjs",
+    "db:import": "node --env-file-if-exists=.env.local scripts/import-sqlite-to-postgres.mjs",
+    "test": "node tests/run-api.mjs",
+    "test:postgres": "node tests/run-postgres.mjs --qa",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": "24.x"
   },
   "dependencies": {
     "next": "16.4.2",
+    "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
-    "tailwindcss": "^4",
+    "prettier": "^3.9.10",
     "typescript": "^5"
   }
 }

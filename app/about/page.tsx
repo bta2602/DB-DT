@@ -1,5 +1,5 @@
-import { StudyHubApp } from '@/components/studyhub/studyhub-app';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'StudyHUB · О проекте' };
-
-export default function Page() { return <StudyHubApp section="about" />; }
+export default function Page() {
+  redirect('/');
+}

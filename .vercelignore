@@ -1,0 +1,15 @@
+.env*
+!.env.example
+.studyhub
+*.sqlite*
+*.db
+tests
+docs
+*.tsbuildinfo
+AGENTS.md
+README.md
+scripts
+database/design
+database/seeds
+database/upgrade-campus.mjs
+database/README.md

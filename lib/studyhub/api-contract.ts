@@ -7,13 +7,12 @@ export type Id = string;
 
 export type Role = 'student' | 'teacher' | 'admin';
 
-export type Mark = 2 | 3 | 4 | 5;
+/** Целое число от 0 до 100; диапазон проверяет сервер. */
+export type Mark = number;
 
-export type AttendanceStatus =
-  | 'present'
-  | 'absent'
-  | 'late'
-  | 'excused';
+export type GradeStatus = 'graded' | 'not_required' | 'absent' | 'unmarked';
+
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
 export type User = {
   id: Id;
@@ -100,12 +99,13 @@ export type Submission = {
 
 /**
  * После снятия оценки запись остаётся:
- * grade = null, version содержит актуальную версию.
+ * grade = null, status = unmarked, version содержит актуальную версию.
  */
 export type Grade = {
   lessonId: Id;
   studentId: Id;
   grade: Mark | null;
+  status: GradeStatus;
   version: number;
 };
 
@@ -147,6 +147,7 @@ export type Bootstrap = {
 export type Session = {
   user: User | null;
   csrfToken: string;
+  demoEnabled: boolean;
 };
 
 export type MutationResult = {
@@ -166,6 +167,9 @@ export type LoginInput = {
   password: string;
 };
 
+export type DemoLoginInput = { role: Role };
+export type AnnouncementInput = Pick<Announcement, 'title' | 'body'>;
+
 /** Самостоятельная регистрация создаёт только студента без назначенной группы. */
 export type RegisterInput = {
   name: string;
@@ -176,6 +180,8 @@ export type RegisterInput = {
 
 export type GradeInput = {
   grade: Mark | null;
+  /** Старый клиент может не передавать status: он выводится из grade. */
+  status?: GradeStatus;
   version: number | null;
 };
 
@@ -196,22 +202,13 @@ export type ReviewInput = {
   version: number;
 };
 
-export type LessonInput = Omit<
-  Lesson,
-  'id' | 'version' | 'attendanceVersion'
->;
+export type LessonInput = Omit<Lesson, 'id' | 'version' | 'attendanceVersion'>;
 
-export type LessonPatch = (
-  | LessonInput
-  | { status: Lesson['status'] }
-) & {
+export type LessonPatch = (LessonInput | { status: Lesson['status'] }) & {
   version: number;
 };
 
-export type AssignmentInput = Omit<
-  Assignment,
-  'id' | 'version'
->;
+export type AssignmentInput = Omit<Assignment, 'id' | 'version'>;
 
 export type UserInput = Omit<User, 'id' | 'version'>;
 
@@ -244,6 +241,41 @@ export const endpoints = {
     method: 'POST',
     path: '/api/auth/login',
     request: 'LoginInput',
+    response: 'MutationResult',
+  },
+
+  demoLogin: {
+    method: 'POST',
+    path: '/api/auth/demo',
+    request: 'DemoLoginInput',
+    response: 'MutationResult',
+  },
+
+  createMaterial: {
+    method: 'POST',
+    path: '/api/materials',
+    request: 'FormData: subjectId, title, file',
+    response: 'MutationResult',
+  },
+
+  deleteMaterial: {
+    method: 'DELETE',
+    path: '/api/materials/:id',
+    request: '{}',
+    response: 'MutationResult',
+  },
+
+  createAnnouncement: {
+    method: 'POST',
+    path: '/api/announcements',
+    request: 'AnnouncementInput',
+    response: 'MutationResult',
+  },
+
+  deleteAnnouncement: {
+    method: 'DELETE',
+    path: '/api/announcements/:id',
+    request: '{}',
     response: 'MutationResult',
   },
 
@@ -395,7 +427,7 @@ export const endpoints = {
 
 export const schoolTimeZone = 'Asia/Qyzylorda';
 
-export const maxSubmissionBytes = 20 * 1024 * 1024;
+export const maxSubmissionBytes = 3 * 1024 * 1024;
 
 export const allowedSubmissionExtensions = [
   'pdf',

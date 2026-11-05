@@ -719,9 +719,40 @@ export function SchedulePage() {
   const { data, user, now } = useStudyHub();
   const [date, setDate] = useState(() => dateKey(new Date(now)));
   const [group, setGroup] = useState('');
+  const [teacher, setTeacher] = useState('');
+  const [room, setRoom] = useState('');
   const [mode, setMode] = useState<'day' | 'week'>('day');
   const [editing, setEditing] = useState<Lesson | 'new' | null>(null);
   const admin = user?.role === 'admin';
+  const teachers = data.users.filter((item) => item.role === 'teacher');
+  const labels = {
+    ru: {
+      allTeachers: 'Все преподаватели',
+      allRooms: 'Все аудитории',
+      previous: 'Назад',
+      next: 'Вперёд',
+    },
+    kk: {
+      allTeachers: 'Барлық оқытушылар',
+      allRooms: 'Барлық аудиториялар',
+      previous: 'Артқа',
+      next: 'Алға',
+    },
+    en: {
+      allTeachers: 'All teachers',
+      allRooms: 'All rooms',
+      previous: 'Previous',
+      next: 'Next',
+    },
+  }[locale];
+
+  function moveDate(direction: -1 | 1) {
+    const selected = new Date(`${date}T12:00:00Z`);
+    const step = mode === 'week' ? 7 : 1;
+    selected.setUTCDate(selected.getUTCDate() + direction * step);
+    setDate(selected.toISOString().slice(0, 10));
+  }
+
   const first = new Date(`${date}T12:00:00Z`);
   first.setUTCDate(first.getUTCDate() - ((first.getUTCDay() + 6) % 7));
   const dates =
@@ -762,6 +793,16 @@ export function SchedulePage() {
             <SelectOptions items={data.groups} blank={t('Все группы')} />
           </select>
         </Field>
+        <Field label={t('Преподаватель')}>
+          <select value={teacher} onChange={(event) => setTeacher(event.target.value)}>
+            <SelectOptions items={teachers} blank={labels.allTeachers} />
+          </select>
+        </Field>
+        <Field label={t('Аудитория')}>
+          <select value={room} onChange={(event) => setRoom(event.target.value)}>
+            <SelectOptions items={data.rooms} blank={labels.allRooms} />
+          </select>
+        </Field>
         <div className="tabs" aria-label={t('Вид расписания')}>
           {(['day', 'week'] as const).map((value) => (
             <button
@@ -775,6 +816,12 @@ export function SchedulePage() {
             </button>
           ))}
         </div>
+        <button type="button" className="button" onClick={() => moveDate(-1)}>
+          ← {labels.previous}
+        </button>
+        <button type="button" className="button" onClick={() => moveDate(1)}>
+          {labels.next} →
+        </button>
         <button type="button" className="button" onClick={() => setDate(dateKey(new Date(now)))}>
           {t('Сегодня')}
         </button>
@@ -788,7 +835,10 @@ export function SchedulePage() {
               lessons={data.lessons
                 .filter(
                   (lesson) =>
-                    dateKey(lesson.startsAt) === day && (!group || lesson.groupId === group),
+                    dateKey(lesson.startsAt) === day &&
+                    (!group || lesson.groupId === group) &&
+                    (!teacher || lesson.teacherId === teacher) &&
+                    (!room || lesson.roomId === room),
                 )
                 .sort((a, b) => a.startsAt.localeCompare(b.startsAt))}
               now={now}

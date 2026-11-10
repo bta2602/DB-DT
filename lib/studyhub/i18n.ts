@@ -13,6 +13,25 @@ export const normalizeTheme = (value?: string | null): Theme =>
 
 // Russian source text is the fallback. User-entered content is never translated.
 export const dictionary: Record<string, readonly [kk: string, en: string]> = {
+  Лекция: ['Дәріс', 'Lecture'],
+  Практика: ['Практика', 'Practice'],
+  СРСП: ['СРСП', 'Guided self-study'],
+  'Время занятия': ['Сабақ уақыты', 'Class time'],
+  'Выберите пару': ['Сабақ уақытын таңдаңыз', 'Select a class slot'],
+  'Выберите тип занятия': ['Сабақ түрін таңдаңыз', 'Select a class type'],
+  'Нет доступных занятий': ['Қолжетімді сабақтар жоқ', 'No available classes'],
+  'Сначала восстановите связанную практику.': [
+    'Алдымен байланысты практиканы қалпына келтіріңіз.',
+    'Restore the linked practice first.',
+  ],
+  'Для задания нужно опубликованное занятие по выбранному предмету.': [
+    'Тапсырма үшін таңдалған пән бойынша жарияланған сабақ қажет.',
+    'An assignment needs a published class for the selected subject.',
+  ],
+  'Дата СРСП совпадает с датой выбранной практики. Аудитория и время отдельно не назначаются.': [
+    'СРСП күні таңдалған практика күнімен сәйкес келеді. Аудитория мен уақыт бөлек белгіленбейді.',
+    'Guided self-study uses the selected practice date. No separate room or time is assigned.',
+  ],
   'Добавить пользователя': ['Пайдаланушы қосу', 'Add user'],
   'Изменить пользователя': ['Пайдаланушыны өзгерту', 'Edit user'],
   'Добавить группу': ['Топ қосу', 'Add group'],
@@ -1033,8 +1052,6 @@ export const dictionary: Record<string, readonly [kk: string, en: string]> = {
   'Практическая работа': ['Практикалық жұмыс', 'Practical assignment'],
   'Самостоятельная работа': ['Өзіндік жұмыс', 'Independent assignment'],
   'Мини-проект': ['Шағын жоба', 'Mini project'],
-  Лекция: ['Дәріс', 'Lecture'],
-  Практика: ['Практика', 'Practice'],
   Лабораторная: ['Зертханалық сабақ', 'Lab class'],
   'Домашнее задание': ['Үй тапсырмасы', 'Homework'],
   'Работы группы': ['Топ жұмыстары', 'Group submissions'],

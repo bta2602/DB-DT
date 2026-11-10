@@ -3,6 +3,7 @@ import { mkdirSync, chmodSync } from 'node:fs';
 import { resolve, relative, isAbsolute, sep } from 'node:path';
 import { authSchema, schoolSchema, learningSchema } from './schema.mjs';
 import { migrateSqliteGrading } from './migrations/grading-100.mjs';
+import { migrateSqliteAcademic } from './migrations/academic-rules.mjs';
 
 // Next.js can load server modules more than once; keep one pool per database/process.
 const runtimeKey = Symbol.for('studyhub.database.runtime');
@@ -196,6 +197,7 @@ async function connect(key) {
     );
   sqlite.exec(learningSchema);
   migrateSqliteGrading(sqlite);
+  migrateSqliteAcademic(sqlite);
   chmodSync(filename, 0o600);
   const queue = serialQueue();
   const query = (sql, args) => {

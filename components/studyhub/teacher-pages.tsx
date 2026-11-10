@@ -21,8 +21,12 @@ import {
   gradeLabel,
   numericGrade,
   lessonStatus,
+  lessonDay,
+  lessonSortKey,
+  lessonKindLabel,
 } from '@/lib/studyhub/client-utils';
 import { downloadCsv } from '@/lib/studyhub/journal-csv';
+import { normalizeLessonKind } from '@/lib/studyhub/lesson-rules.mjs';
 import { deadlineFilters, deadlineLabels, type DeadlineFilter } from '@/lib/studyhub/deadlines';
 import {
   academicTypeLabel,
@@ -281,18 +285,26 @@ function TeacherLesson({
       <Badge kind={current ? '' : 'neutral'}>
         {current
           ? t('Сейчас на занятии')
-          : `${formatTime(lesson.startsAt)}–${formatTime(lesson.endsAt)}`}
+          : lesson.kind === 'srsp'
+            ? t('СРСП')
+            : `${formatTime(lesson.startsAt)}–${formatTime(lesson.endsAt)}`}
       </Badge>
       <h2>{title(data.subjects, lesson.subjectId)}</h2>
       <p>
-        {title(data.groups, lesson.groupId)} · {lesson.kind}
+        {title(data.groups, lesson.groupId)} · {t(lessonKindLabel(lesson.kind))}
       </p>
-      <p className="muted">
-        <Icon name="pin" className="sm" /> {title(data.rooms, lesson.roomId)} ·{' '}
-        {formatTime(lesson.startsAt)}–{formatTime(lesson.endsAt)}
-      </p>
-      <Link className="button primary small mt" href={`/journal?lesson=${encoded(lesson.id)}`}>
-        {t('Открыть журнал')} <Icon name="arrow" className="sm" />
+      {lesson.kind !== 'srsp' && (
+        <p className="muted">
+          <Icon name="pin" className="sm" /> {title(data.rooms, lesson.roomId)} ·{' '}
+          {formatTime(lesson.startsAt)}–{formatTime(lesson.endsAt)}
+        </p>
+      )}
+      <Link
+        className="button primary small mt"
+        href={lesson.kind === 'srsp' ? '/assignments' : `/journal?lesson=${encoded(lesson.id)}`}
+      >
+        {lesson.kind === 'srsp' ? t('Задания') : t('Открыть журнал')}{' '}
+        <Icon name="arrow" className="sm" />
       </Link>
     </article>
   );
@@ -307,12 +319,12 @@ export function TeacherToday() {
   const lessons = scope.lessons
     .filter(
       (lesson) =>
-        dateKey(lesson.startsAt) === dateKey(new Date(now)) &&
+        lessonDay(lesson) === dateKey(new Date(now)) &&
         (!filters.groupId || lesson.groupId === filters.groupId) &&
         (!filters.subjectId || lesson.subjectId === filters.subjectId) &&
         (!filters.type || lesson.kind === filters.type),
     )
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
   const current = lessons.find((lesson) => lessonStatus(lesson, now) === 'current');
   const next = lessons.find((lesson) => lessonStatus(lesson, now) === 'upcoming');
   const pending = scope.records.filter(
@@ -515,7 +527,8 @@ function GradeEditor({
     >
       <p className="grade-editor-student">{student.name}</p>
       <p className="small muted mb">
-        {formatDate(lesson.startsAt, locale)} · {formatTime(lesson.startsAt)} · {lesson.kind}
+        {formatDate(lesson.startsAt, locale)} · {formatTime(lesson.startsAt)} ·{' '}
+        {t(lessonKindLabel(lesson.kind))}
       </p>
       <form
         onSubmit={(event) => {
@@ -625,12 +638,14 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
   );
   const columns = [
     ...scope.lessons
-      .filter((item) => item.groupId === groupId && item.subjectId === subjectId)
+      .filter(
+        (item) => item.kind !== 'srsp' && item.groupId === groupId && item.subjectId === subjectId,
+      )
       .map((item) => ({
         kind: 'lesson' as const,
         id: item.id,
-        date: item.startsAt,
-        label: item.kind,
+        date: item.startsAt || item.date,
+        label: lessonKindLabel(item.kind),
       })),
     ...scope.assignments
       .filter((item) => item.groupId === groupId && item.subjectId === subjectId)
@@ -1586,7 +1601,7 @@ function NewAssignment({
   onClose: () => void;
   onCreated: (groupId: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data, user, mutate, notify, now } = useStudyHub();
   const scope = teacherScope(data, user);
   const [groupId, setGroupId] = useState(scope.groups[0]?.id || '');
@@ -1595,12 +1610,27 @@ function NewAssignment({
   const subjectId = subjects.some((subject) => subject.id === selectedSubject)
     ? selectedSubject
     : subjects[0]?.id || '';
+  const [selectedLesson, setSelectedLesson] = useState('');
+  const lessons = scope.lessons.filter((lesson) => {
+    if (lesson.groupId !== groupId || lesson.subjectId !== subjectId) return false;
+    try {
+      normalizeLessonKind(lesson.kind);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const linkedLesson = lessons.find((lesson) => lesson.id === selectedLesson) || lessons[0];
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (lock.current || !user) return;
+    if (!linkedLesson) {
+      setError('Для задания нужно опубликованное занятие по выбранному предмету.');
+      return;
+    }
     const form = new FormData(event.currentTarget);
     const value = (key: string) => String(form.get(key) || '').trim();
     const dueAt = new Date(`${value('dueAt')}${value('dueAt').length === 16 ? ':00' : ''}+05:00`);
@@ -1628,7 +1658,7 @@ function NewAssignment({
           .split('\n')
           .map((step) => step.trim())
           .filter(Boolean),
-        type: value('type'),
+        lessonId: linkedLesson.id,
         groupId,
         subjectId,
         teacherId: user.id,
@@ -1698,13 +1728,38 @@ function NewAssignment({
             <input type="datetime-local" name="dueAt" required disabled={busy} />
           </Field>
           <Field label={t('Тип')}>
-            <select name="type" disabled={busy}>
-              <option>{t('Лабораторная работа')}</option>
-              <option>{t('Практическая работа')}</option>
-              <option>{t('Домашнее задание')}</option>
-            </select>
+            <input readOnly value={linkedLesson ? t(lessonKindLabel(linkedLesson.kind)) : '—'} />
           </Field>
         </div>
+        <Field label={t('Занятие')}>
+          <select
+            name="lessonId"
+            required
+            value={linkedLesson?.id || ''}
+            disabled={busy || !lessons.length}
+            onChange={(event) => setSelectedLesson(event.target.value)}
+          >
+            {!lessons.length && <option value="">{t('Нет доступных занятий')}</option>}
+            {lessons.map((lesson) => (
+              <option key={lesson.id} value={lesson.id}>
+                {formatDate(lessonDay(lesson), locale)} · {formatTime(lesson.startsAt)} ·{' '}
+                {t(lessonKindLabel(lesson.kind))}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {!lessons.length && (
+          <p className="small muted">
+            {t('Для задания нужно опубликованное занятие по выбранному предмету.')}
+          </p>
+        )}
+        {linkedLesson?.kind === 'srsp' && (
+          <p className="small muted">
+            {t(
+              'Дата СРСП совпадает с датой выбранной практики. Аудитория и время отдельно не назначаются.',
+            )}
+          </p>
+        )}
         <Field label={t('Условия выполнения')}>
           <textarea
             name="description"
@@ -1731,7 +1786,7 @@ function NewAssignment({
           <button type="button" className="button" disabled={busy} onClick={onClose}>
             {t('Отмена')}{' '}
           </button>
-          <button type="submit" className="button primary" disabled={busy}>
+          <button type="submit" className="button primary" disabled={busy || !linkedLesson}>
             {busy ? t('Создание…') : t('Создать задание')}
           </button>
         </div>

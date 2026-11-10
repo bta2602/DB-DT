@@ -49,9 +49,18 @@ async function main() {
     );
   }
   const qa = parseEnv(await readFile(join(root, envFile), 'utf8'));
-  const production = parseEnv(await readFile(join(root, '.env.local'), 'utf8'));
+  const production = parseEnv(
+    await readFile(join(root, '.env.local'), 'utf8').catch((error) => {
+      if (error.code === 'ENOENT') return '';
+      throw error;
+    }),
+  );
   const qaUrl = new URL(qa.DATABASE_URL);
-  const productionUrl = new URL(production.DATABASE_URL);
+  const productionHost = production.DATABASE_URL
+    ? new URL(production.DATABASE_URL).hostname
+    : qa.PRODUCTION_DATABASE_HOST;
+  assert.ok(productionHost, 'Provide .env.local or PRODUCTION_DATABASE_HOST in the QA env file.');
+  const productionUrl = new URL(`postgresql://${productionHost}`);
   const endpoint = (url) => url.hostname.replace('-pooler.', '.').toLowerCase();
   assert.ok(['postgres:', 'postgresql:'].includes(qaUrl.protocol), 'QA requires PostgreSQL.');
   assert.notEqual(
@@ -162,6 +171,7 @@ async function main() {
   await runTests('tests/postgres.test.mjs');
   await startServer();
   await runTests('tests/api.test.mjs');
+  await runTests('tests/academic-api.test.mjs');
   const client = new TestClient(baseUrl);
   const session = await client.demo('admin');
   const before = await client.bootstrap();

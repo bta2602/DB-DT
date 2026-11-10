@@ -6,6 +6,10 @@
 export type Id = string;
 
 export type Role = 'student' | 'teacher' | 'admin';
+export type LessonKind = 'lecture' | 'practice' | 'srsp';
+export type LessonSlotId = `p${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`;
+export type TeachingLanguage = 'kk' | 'ru';
+export type RoomType = 'computer' | 'lecture' | 'laboratory' | 'ordinary';
 
 /** Целое число от 0 до 100; диапазон проверяет сервер. */
 export type Mark = number;
@@ -28,6 +32,9 @@ export type Group = {
   name: string;
   course: number;
   curatorId: Id | null;
+  program?: 'IS' | 'VTIPO' | 'DS' | null;
+  intakeYear?: number | null;
+  language?: TeachingLanguage | null;
   version: number;
 };
 
@@ -41,6 +48,9 @@ export type Room = {
   id: Id;
   name: string;
   capacity: number | null;
+  number?: string | null;
+  floor?: number | null;
+  type?: RoomType | null;
   version: number;
 };
 
@@ -50,14 +60,38 @@ export type TeachingAssignment = {
   subjectId: Id;
 };
 
+export type TeacherSubject = { teacherId: Id; subjectId: Id };
+export type TeacherLanguage = { teacherId: Id; language: TeachingLanguage };
+export type GroupSubject = {
+  groupId: Id;
+  subjectId: Id;
+  academicYear: number;
+  semester: 1 | 2;
+};
+
+export type TeacherSubjectsInput = { teacherId: Id; subjectIds: Id[] };
+export type TeacherLanguagesInput = { teacherId: Id; languages: TeachingLanguage[] };
+export type GroupSubjectsInput = {
+  groupId: Id;
+  academicYear: number;
+  semester: 1 | 2;
+  subjectIds: Id[];
+};
+export type TeachingAssignmentInput = TeachingAssignment & { date?: string };
+
 export type Lesson = {
   id: Id;
   groupId: Id;
   subjectId: Id;
   teacherId: Id;
-  roomId: Id;
-  startsAt: string;
-  endsAt: string;
+  roomId: Id | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  practiceId: Id | null;
+  slotId: LessonSlotId | null;
+  /** Calendar date in UTC+5; derived from the practice for СРСП. */
+  date: string;
+  /** Legacy records retain their original display label. New writes use LessonKind. */
   kind: string;
   status: 'scheduled' | 'cancelled';
   note: string;
@@ -70,6 +104,7 @@ export type Assignment = {
   subjectId: Id;
   groupId: Id;
   teacherId: Id;
+  lessonId: Id | null;
   title: string;
   type: string;
   description: string;
@@ -135,6 +170,9 @@ export type Bootstrap = {
   subjects: Subject[];
   rooms: Room[];
   teachingAssignments: TeachingAssignment[];
+  teacherSubjects: TeacherSubject[];
+  teacherLanguages: TeacherLanguage[];
+  groupSubjects: GroupSubject[];
   lessons: Lesson[];
   assignments: Assignment[];
   submissions: Submission[];
@@ -202,13 +240,34 @@ export type ReviewInput = {
   version: number;
 };
 
-export type LessonInput = Omit<Lesson, 'id' | 'version' | 'attendanceVersion'>;
+export type LessonInput = {
+  groupId: Id;
+  subjectId: Id;
+  teacherId: Id;
+  kind: LessonKind;
+  note?: string;
+  status?: Lesson['status'];
+  date?: string;
+  slotId?: LessonSlotId | null;
+  practiceId?: Id | null;
+  roomId?: Id | null;
+  /** Legacy clients may send timestamps; the server checks the exact fixed slot. */
+  startsAt?: string | null;
+  endsAt?: string | null;
+};
 
-export type LessonPatch = (LessonInput | { status: Lesson['status'] }) & {
+export type LessonPatch = Partial<LessonInput> & {
   version: number;
 };
 
-export type AssignmentInput = Omit<Assignment, 'id' | 'version'>;
+export type AssignmentInput = Omit<Assignment, 'id' | 'version' | 'lessonId' | 'type'> & {
+  lessonId: Id;
+  type?: LessonKind;
+};
+
+export type RoomAvailability = {
+  rooms: { roomId: Id; available: boolean; capacityOk: boolean; busyUntil: string | null }[];
+};
 
 export type UserInput = Omit<User, 'id' | 'version'>;
 
@@ -231,6 +290,29 @@ export type ProfileInput = {
  * GET /api/session для гостя возвращает user: null.
  */
 export const endpoints = {
+  teacherSubjects: {
+    method: 'PUT',
+    path: '/api/academic/teacher-subjects',
+    request: 'TeacherSubjectsInput',
+    response: 'MutationResult',
+  },
+  teacherLanguages: {
+    method: 'PUT',
+    path: '/api/academic/teacher-languages',
+    request: 'TeacherLanguagesInput',
+    response: 'MutationResult',
+  },
+  groupSubjects: {
+    method: 'PUT',
+    path: '/api/academic/group-subjects',
+    request: 'GroupSubjectsInput',
+    response: 'MutationResult',
+  },
+  roomAvailability: {
+    method: 'GET',
+    path: '/api/rooms/availability?date=YYYY-MM-DD&slotId=p1&groupId=...&excludeLessonId=...',
+    response: 'RoomAvailability',
+  },
   session: {
     method: 'GET',
     path: '/api/session',
@@ -413,7 +495,7 @@ export const endpoints = {
   teachingAssignment: {
     method: 'PUT',
     path: '/api/teaching-assignments',
-    request: 'TeachingAssignment',
+    request: 'TeachingAssignmentInput',
     response: 'MutationResult',
   },
 

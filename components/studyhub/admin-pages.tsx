@@ -3,6 +3,7 @@
 import { useI18n } from './preferences';
 
 import Link from 'next/link';
+import { lessonInterval, lessonSlots } from '@/lib/studyhub/lesson-rules.mjs';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type {
   Bootstrap,
@@ -18,6 +19,9 @@ import {
   formatDate,
   formatTime,
   lessonStatus,
+  lessonDay,
+  lessonSortKey,
+  lessonKindLabel,
   roles,
   statusNames,
 } from '@/lib/studyhub/client-utils';
@@ -200,8 +204,8 @@ export function LessonList({
         return (
           <div className="publication-lesson" key={lesson.id}>
             <div className="lesson-time">
-              {formatTime(lesson.startsAt)}
-              <small>{formatTime(lesson.endsAt)}</small>
+              {lesson.kind === 'srsp' ? t('СРСП') : formatTime(lesson.startsAt)}
+              {lesson.endsAt && <small>{formatTime(lesson.endsAt)}</small>}
             </div>
             <span className="subject-icon">
               <Icon name="book" />
@@ -209,11 +213,15 @@ export function LessonList({
             <div className="grow">
               <strong>{referenceName(data.subjects, lesson.subjectId)}</strong>
               <p>
-                {lesson.kind} · {referenceName(data.users, lesson.teacherId)}
+                {t(lessonKindLabel(lesson.kind))} · {referenceName(data.users, lesson.teacherId)}
               </p>
               <small>
-                {referenceName(data.groups, lesson.groupId)} {t('· Ауд.')}{' '}
-                {referenceName(data.rooms, lesson.roomId)}
+                {referenceName(data.groups, lesson.groupId)}{' '}
+                {lesson.roomId && (
+                  <>
+                    {t('· Ауд.')} {referenceName(data.rooms, lesson.roomId)}
+                  </>
+                )}
               </small>
             </div>
             <Badge kind={status === 'current' ? '' : status === 'cancelled' ? 'red' : 'neutral'}>
@@ -569,16 +577,14 @@ function LessonEditor({
     setError('');
     setBusy(true);
     try {
-      const startsAt = new Date(`${value('date')}T${value('start')}:00+05:00`).toISOString();
-      const endsAt = new Date(`${value('date')}T${value('end')}:00+05:00`).toISOString();
-      if (endsAt <= startsAt) throw new Error(t('Время окончания должно быть позже начала.'));
+      const { startsAt, endsAt } = lessonInterval(value('date'), value('slotId'));
       const body = {
         subjectId: value('subjectId'),
         groupId: value('groupId'),
         teacherId: value('teacherId'),
         roomId: value('roomId'),
-        startsAt,
-        endsAt,
+        date: value('date'),
+        slotId: value('slotId'),
         kind: value('kind'),
         note: value('note'),
         status: lesson?.status || 'scheduled',
@@ -590,6 +596,8 @@ function LessonEditor({
           (other) =>
             other.id !== lesson?.id &&
             other.status !== 'cancelled' &&
+            other.startsAt !== null &&
+            other.endsAt !== null &&
             other.startsAt < endsAt &&
             startsAt < other.endsAt &&
             (other.groupId === body.groupId ||
@@ -631,6 +639,42 @@ function LessonEditor({
     }
   }
 
+  if (lesson?.kind === 'srsp') {
+    const practice = data.lessons.find((item) => item.id === lesson.practiceId);
+    const parentActive = practice?.status === 'scheduled';
+    return (
+      <Modal title={t('СРСП')} onClose={close}>
+        <p>
+          {formatDate(lesson.date)} · {referenceName(data.subjects, lesson.subjectId)}
+        </p>
+        <p className="small muted">
+          {t(
+            'Дата СРСП совпадает с датой выбранной практики. Аудитория и время отдельно не назначаются.',
+          )}
+        </p>
+        <p className="form-error error-text" role="alert">
+          {t(error)}
+        </p>
+        {!parentActive && (
+          <p className="small muted">{t('Сначала восстановите связанную практику.')}</p>
+        )}
+        <div className="form-actions">
+          <button
+            type="button"
+            className="button"
+            disabled={busy || !parentActive}
+            onClick={toggle}
+          >
+            {lesson.status === 'cancelled' ? t('Восстановить занятие') : t('Отменить занятие')}
+          </button>
+          <button type="button" className="button" disabled={busy} onClick={close}>
+            {t('Закрыть')}
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal title={lesson ? t('Изменить занятие') : t('Новое занятие')} onClose={close}>
       <form onSubmit={save} aria-busy={busy}>
@@ -653,7 +697,7 @@ function LessonEditor({
         </Field>
         <div className="form-row">
           <Field label={t('Аудитория')}>
-            <select name="roomId" required defaultValue={lesson?.roomId}>
+            <select name="roomId" required defaultValue={lesson?.roomId || ''}>
               <SelectOptions items={data.rooms} />
             </select>
           </Field>
@@ -662,38 +706,40 @@ function LessonEditor({
               name="date"
               type="date"
               required
-              defaultValue={
-                lesson ? dateKey(lesson.startsAt) : initialDate || dateKey(new Date(now))
-              }
+              defaultValue={lesson ? lessonDay(lesson) : initialDate || dateKey(new Date(now))}
             />
           </Field>
         </div>
-        <div className="form-row">
-          <Field label={t('Начало')}>
-            <input
-              name="start"
-              type="time"
-              required
-              defaultValue={lesson ? formatTime(lesson.startsAt) : '09:00'}
-            />
-          </Field>
-          <Field label={t('Окончание')}>
-            <input
-              name="end"
-              type="time"
-              required
-              defaultValue={lesson ? formatTime(lesson.endsAt) : '10:20'}
-            />
-          </Field>
-        </div>
+        <Field label={t('Время занятия')}>
+          <select name="slotId" required defaultValue={lesson?.slotId || ''}>
+            <option value="">{t('Выберите пару')}</option>
+            {lessonSlots.map((slot) => (
+              <option key={slot.id} value={slot.id}>
+                {slot.start}–{slot.end}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label={t('Тип занятия')}>
-          <input
+          <select
             name="kind"
             required
-            maxLength={60}
-            defaultValue={lesson?.kind || ''}
-            placeholder={t('Лекция, практика…')}
-          />
+            defaultValue={
+              lesson
+                ? ['lecture', 'Лекция'].includes(lesson.kind)
+                  ? 'lecture'
+                  : ['practice', 'Практика', 'Практическая работа', 'Лабораторная работа'].includes(
+                        lesson.kind,
+                      )
+                    ? 'practice'
+                    : ''
+                : 'lecture'
+            }
+          >
+            <option value="">{t('Выберите тип занятия')}</option>
+            <option value="lecture">{t('Лекция')}</option>
+            <option value="practice">{t('Практика')}</option>
+          </select>
         </Field>
         <Field label={t('Примечание')}>
           <textarea name="note" maxLength={1000} defaultValue={lesson?.note || ''} />
@@ -730,13 +776,11 @@ export function AdminOverview() {
   const filtered = scope.lessons.filter((lesson) => matchesScheduleFilters(lesson, filters));
   const active = filtered
     .filter((lesson) => lessonStatus(lesson, now) === 'current')
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
   const today = dateKey(new Date(now));
   const next = filtered
-    .filter(
-      (lesson) => lessonStatus(lesson, now) === 'upcoming' && dateKey(lesson.startsAt) === today,
-    )
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    .filter((lesson) => lessonStatus(lesson, now) === 'upcoming' && lessonDay(lesson) === today)
+    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
   return (
     <>
       <PageHeading
@@ -902,8 +946,7 @@ export function SchedulePage() {
       </div>
       <StorageFeedback status={storage.status} />
       <p className="muted" role="status">
-        {labels.results}:{' '}
-        {filtered.filter((lesson) => dates.includes(dateKey(lesson.startsAt))).length}
+        {labels.results}: {filtered.filter((lesson) => dates.includes(lessonDay(lesson))).length}
       </p>
       {admin && <SetupHint onOpen={() => setEditing('new')} />}
       <div className={mode === 'week' ? 'publication-week' : ''}>
@@ -912,8 +955,8 @@ export function SchedulePage() {
             <h2 className="schedule-date-title">{formatDate(day, locale)}</h2>
             <LessonList
               lessons={filtered
-                .filter((lesson) => dateKey(lesson.startsAt) === day)
-                .sort((a, b) => a.startsAt.localeCompare(b.startsAt))}
+                .filter((lesson) => lessonDay(lesson) === day)
+                .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)))}
               now={now}
               onEdit={admin ? setEditing : undefined}
             />

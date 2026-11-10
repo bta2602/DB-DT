@@ -10,6 +10,8 @@ import {
   readLearningFile,
   reviewSubmission,
   saveAssignment,
+  saveAcademicConfig,
+  saveDirectory,
   saveGrade,
   saveLesson,
   saveSubmission,
@@ -19,6 +21,7 @@ import {
 } from '../lib/studyhub/auth-store.mjs';
 import { createDemoData } from '../database/seeds/demo-data.mjs';
 import { checkCampusData } from './campus-checks.mjs';
+import { campusDate, lessonInterval, lessonPeriod } from '../lib/studyhub/lesson-rules.mjs';
 
 const runFile = promisify(execFile);
 const directory = process.env.STUDYHUB_TEST_SEED_DIR;
@@ -74,26 +77,87 @@ test(
     manualStart.setUTCHours(3, 30, 0, 0);
     while ([0, 6].includes(manualStart.getUTCDay()))
       manualStart.setUTCDate(manualStart.getUTCDate() + 1);
+    const manualDate = campusDate(manualStart.toISOString());
+    // Existing seed lessons remain legacy records; configure only explicit prerequisites
+    // for the new manual activity, preserving every previously assigned subject.
+    for (const teacherId of new Set(
+      small.teachingAssignments
+        .filter((row) => row.groupId === student.groupId)
+        .map((row) => row.teacherId),
+    )) {
+      await saveAcademicConfig(admin, 'teacher-languages', { teacherId, languages: ['ru'] });
+    }
+    const studentGroup = small.groups.find((row) => row.id === student.groupId);
+    await saveDirectory(
+      admin,
+      'groups',
+      {
+        name: studentGroup.name,
+        course: studentGroup.course,
+        curatorId: studentGroup.curatorId,
+        language: 'ru',
+        version: studentGroup.version,
+      },
+      studentGroup.id,
+    );
+    const teacherSubjects = [
+      ...new Set(
+        small.teachingAssignments
+          .filter((row) => row.teacherId === teacher.id)
+          .map((row) => row.subjectId),
+      ),
+    ];
+    await saveAcademicConfig(admin, 'teacher-subjects', {
+      teacherId: teacher.id,
+      subjectIds: teacherSubjects,
+    });
+    const groupSubjects = [
+      ...new Set(
+        small.teachingAssignments
+          .filter((row) => row.groupId === student.groupId)
+          .map((row) => row.subjectId),
+      ),
+    ];
+    const periods = new Map(
+      [campusDate(), manualDate].map((date) => {
+        const period = lessonPeriod(date);
+        return [`${period.academicYear}:${period.semester}`, period];
+      }),
+    );
+    for (const period of periods.values()) {
+      await saveAcademicConfig(admin, 'group-subjects', {
+        groupId: student.groupId,
+        subjectIds: groupSubjects,
+        ...period,
+      });
+    }
+    const interval = lessonInterval(manualDate, 'p1');
     await saveLesson(admin, {
       groupId: oldLesson.groupId,
       subjectId: oldLesson.subjectId,
       teacherId: teacher.id,
       roomId: small.rooms.find((room) => room.capacity >= 20).id,
-      startsAt: manualStart.toISOString(),
-      endsAt: new Date(+manualStart + 80 * 60000).toISOString(),
-      kind: 'Консультация',
+      startsAt: interval.startsAt,
+      endsAt: interval.endsAt,
+      kind: 'practice',
       status: 'scheduled',
       note: 'Занятие, добавленное до расширения базы',
     });
+    const createdLesson = (await bootstrapFor(admin)).lessons.find(
+      (item) => item.note === 'Занятие, добавленное до расширения базы',
+    );
+    assert.ok(createdLesson);
+    assert.equal(createdLesson.slotId, 'p1');
+    assert.equal(Date.parse(createdLesson.endsAt) - Date.parse(createdLesson.startsAt), 50 * 60000);
     await saveAssignment(teacher, {
       subjectId: oldLesson.subjectId,
       groupId: student.groupId,
       teacherId: teacher.id,
       title: 'Работа, созданная до расширения',
-      type: 'Практическая работа',
+      lessonId: createdLesson.id,
       description: 'Сохраните SQL-запрос.',
       steps: ['Отправить файл'],
-      dueAt: new Date(Date.now() + 86400000).toISOString(),
+      dueAt: new Date(Date.parse(interval.endsAt) + 86400000).toISOString(),
     });
     const task = (await bootstrapFor(admin)).assignments.find(
       (item) => item.title === 'Работа, созданная до расширения',

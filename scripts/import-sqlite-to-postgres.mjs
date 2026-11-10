@@ -13,6 +13,9 @@ const importedTables = [
   'school_groups',
   'school_subjects',
   'school_rooms',
+  'school_teacher_subjects',
+  'school_teacher_languages',
+  'school_group_subjects',
   'school_teaching_assignments',
   'school_lessons',
   'school_files',
@@ -157,7 +160,15 @@ function* batches(rows, columns) {
 
 async function insertTable(db, name, table) {
   const columns = table.columns.map((column) => column.name);
-  for (const rows of batches(table.rows, table.columns)) {
+  // Insert parent practices before linked SRSP records, including across batches.
+  const orderedRows =
+    name === 'school_lessons'
+      ? [
+          ...table.rows.filter((row) => row.kind !== 'srsp'),
+          ...table.rows.filter((row) => row.kind === 'srsp'),
+        ]
+      : table.rows;
+  for (const rows of batches(orderedRows, table.columns)) {
     const values = rows.flatMap((row) =>
       columns.map((column) =>
         name === 'auth_users' && column === 'group_id' ? null : row[column],

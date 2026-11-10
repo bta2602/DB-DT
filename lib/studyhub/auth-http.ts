@@ -8,6 +8,8 @@ import {
   registerStudent,
   saveDirectory,
   saveLesson,
+  getRoomAvailability,
+  saveAcademicConfig,
   signIn,
   signOut,
   updateOwnProfile,
@@ -291,10 +293,10 @@ export function updateProfile(request: NextRequest) {
 type DirectoryKind = 'users' | 'groups' | 'subjects' | 'rooms' | 'teaching-assignments';
 const directoryFields: Record<DirectoryKind, string[]> = {
   users: ['name', 'email', 'role', 'groupId'],
-  groups: ['name', 'course', 'curatorId'],
+  groups: ['name', 'course', 'curatorId', 'program', 'intakeYear', 'language'],
   subjects: ['name'],
-  rooms: ['name', 'capacity'],
-  'teaching-assignments': ['teacherId', 'groupId', 'subjectId'],
+  rooms: ['name', 'capacity', 'number', 'floor', 'type'],
+  'teaching-assignments': ['teacherId', 'groupId', 'subjectId', 'date'],
 };
 
 async function adminSession(request: NextRequest) {
@@ -330,6 +332,9 @@ export function lessonMutation(request: NextRequest, id = '') {
       'roomId',
       'startsAt',
       'endsAt',
+      'date',
+      'slotId',
+      'practiceId',
       'kind',
       'note',
       'status',
@@ -376,8 +381,39 @@ export function assignmentMutation(request: NextRequest) {
       'subjectId',
       'teacherId',
       'dueAt',
+      'lessonId',
     ]);
     return json(await saveAssignment(session.user!, input));
+  });
+}
+
+export function roomAvailability(request: NextRequest) {
+  return execute(request, async () => {
+    const session = await currentSession(request, true);
+    const allowed = new Set(['date', 'slotId', 'groupId', 'excludeLessonId']);
+    const input: Record<string, string> = {};
+    for (const [key, value] of request.nextUrl.searchParams) {
+      if (!allowed.has(key) || key in input) {
+        throw new AuthError(422, 'INVALID_QUERY', 'Некорректные параметры доступности аудиторий.');
+      }
+      input[key] = value;
+    }
+    return json(await getRoomAvailability(session.user!, input));
+  });
+}
+
+type AcademicKind = 'teacher-subjects' | 'teacher-languages' | 'group-subjects';
+const academicFields: Record<AcademicKind, string[]> = {
+  'teacher-subjects': ['teacherId', 'subjectIds'],
+  'teacher-languages': ['teacherId', 'languages'],
+  'group-subjects': ['groupId', 'academicYear', 'semester', 'subjectIds'],
+};
+
+export function academicMutation(request: NextRequest, kind: AcademicKind) {
+  return execute(request, async () => {
+    const session = await adminSession(request);
+    const input = await body(request, academicFields[kind]);
+    return json(await saveAcademicConfig(session.user!, kind, input));
   });
 }
 

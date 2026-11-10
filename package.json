@@ -11,6 +11,7 @@
     "demo:seed": "node --env-file-if-exists=.env.local scripts/seed-demo.mjs",
     "demo:setup": "node scripts/setup-demo.mjs",
     "db:import": "node --env-file-if-exists=.env.local scripts/import-sqlite-to-postgres.mjs",
+    "db:migrate:academic": "node scripts/migrate-academic.mjs",
     "test": "node tests/run-api.mjs",
     "test:postgres": "node tests/run-postgres.mjs --qa",
     "format": "prettier --write .",

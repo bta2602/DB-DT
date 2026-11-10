@@ -29,11 +29,58 @@ export const authSchema = `
     );
   `;
 
+export const academicRelationsSchema = `
+  CREATE TABLE IF NOT EXISTS school_teacher_subjects (
+    teacher_id TEXT NOT NULL REFERENCES auth_users(id),
+    subject_id TEXT NOT NULL REFERENCES school_subjects(id),
+    PRIMARY KEY(teacher_id,subject_id)
+  );
+  CREATE TABLE IF NOT EXISTS school_teacher_languages (
+    teacher_id TEXT NOT NULL REFERENCES auth_users(id),
+    language TEXT NOT NULL CHECK(language IN ('kk','ru')),
+    PRIMARY KEY(teacher_id,language)
+  );
+  CREATE TABLE IF NOT EXISTS school_group_subjects (
+    group_id TEXT NOT NULL REFERENCES school_groups(id),
+    subject_id TEXT NOT NULL REFERENCES school_subjects(id),
+    academic_year INTEGER NOT NULL CHECK(academic_year BETWEEN 1900 AND 9999),
+    semester INTEGER NOT NULL CHECK(semester IN (1,2)),
+    PRIMARY KEY(group_id,subject_id,academic_year,semester)
+  );
+  CREATE INDEX IF NOT EXISTS school_teacher_subject_lookup ON school_teacher_subjects(subject_id,teacher_id);
+  CREATE INDEX IF NOT EXISTS school_curriculum_subject ON school_group_subjects(subject_id,academic_year,semester);
+`;
+
+export const lessonsSchema = `
+  CREATE TABLE IF NOT EXISTS school_lessons (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL REFERENCES school_groups(id),
+    subject_id TEXT NOT NULL REFERENCES school_subjects(id),
+    teacher_id TEXT NOT NULL REFERENCES auth_users(id),
+    room_id TEXT REFERENCES school_rooms(id),
+    starts_at TEXT, ends_at TEXT,
+    kind TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('scheduled','cancelled')),
+    note TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
+    attendance_version INTEGER NOT NULL DEFAULT 1,
+    practice_id TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT,
+    slot_id TEXT CHECK(slot_id IS NULL OR slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9')),
+    CONSTRAINT school_lessons_activity_check CHECK (
+      (kind='srsp' AND practice_id IS NOT NULL AND practice_id<>id
+        AND room_id IS NULL AND starts_at IS NULL AND ends_at IS NULL AND slot_id IS NULL)
+      OR (kind<>'srsp' AND practice_id IS NULL AND room_id IS NOT NULL
+        AND starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at>starts_at)
+    )
+  );
+`;
+
 export const schoolSchema = `
       CREATE TABLE IF NOT EXISTS school_groups (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE,
         course INTEGER NOT NULL CHECK(course BETWEEN 1 AND 6),
-        curator_id TEXT REFERENCES auth_users(id), version INTEGER NOT NULL DEFAULT 1
+        curator_id TEXT REFERENCES auth_users(id), version INTEGER NOT NULL DEFAULT 1,
+        program TEXT CHECK(program IN ('IS','VTIPO','DS')),
+        intake_year INTEGER CHECK(intake_year BETWEEN 1900 AND 9999),
+        language TEXT CHECK(language IN ('kk','ru'))
       );
       CREATE TABLE IF NOT EXISTS school_subjects (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE,
@@ -41,7 +88,9 @@ export const schoolSchema = `
       );
       CREATE TABLE IF NOT EXISTS school_rooms (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE,
-        capacity INTEGER CHECK(capacity BETWEEN 1 AND 1000), version INTEGER NOT NULL DEFAULT 1
+        capacity INTEGER CHECK(capacity BETWEEN 1 AND 1000), version INTEGER NOT NULL DEFAULT 1,
+        number TEXT, floor INTEGER CHECK(floor BETWEEN 1 AND 100),
+        type TEXT CHECK(type IN ('computer','lecture','laboratory','ordinary'))
       );
       CREATE TABLE IF NOT EXISTS school_teaching_assignments (
         teacher_id TEXT NOT NULL REFERENCES auth_users(id),
@@ -49,17 +98,8 @@ export const schoolSchema = `
         subject_id TEXT NOT NULL REFERENCES school_subjects(id),
         PRIMARY KEY(teacher_id, group_id, subject_id)
       );
-      CREATE TABLE IF NOT EXISTS school_lessons (
-        id TEXT PRIMARY KEY,
-        group_id TEXT NOT NULL REFERENCES school_groups(id),
-        subject_id TEXT NOT NULL REFERENCES school_subjects(id),
-        teacher_id TEXT NOT NULL REFERENCES auth_users(id),
-        room_id TEXT NOT NULL REFERENCES school_rooms(id),
-        starts_at TEXT NOT NULL, ends_at TEXT NOT NULL CHECK(ends_at > starts_at),
-        kind TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('scheduled','cancelled')),
-        note TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
-        attendance_version INTEGER NOT NULL DEFAULT 1
-      );
+      ${academicRelationsSchema}
+      ${lessonsSchema}
       CREATE INDEX IF NOT EXISTS school_lessons_time ON school_lessons(starts_at, ends_at);
       CREATE INDEX IF NOT EXISTS school_lessons_group ON school_lessons(group_id, starts_at);
       CREATE INDEX IF NOT EXISTS school_lessons_teacher ON school_lessons(teacher_id, starts_at);
@@ -100,7 +140,8 @@ export const learningSchema = `
     id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES school_subjects(id),
     group_id TEXT NOT NULL REFERENCES school_groups(id), teacher_id TEXT NOT NULL REFERENCES auth_users(id),
     title TEXT NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, steps_json TEXT NOT NULL,
-    due_at TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1
+    due_at TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
+    lesson_id TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT
   );
   ${submissionsSchema}
   ${gradesSchema}

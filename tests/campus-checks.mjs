@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { campusDate, lessonInterval, normalizeLessonKind } from '../lib/studyhub/lesson-rules.mjs';
 
 const localTime = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Asia/Qyzylorda',
@@ -33,6 +34,7 @@ export function checkCampusData(data) {
     data.teachingAssignments.map((row) => `${row.teacherId}/${row.groupId}/${row.subjectId}`),
   );
   const lessons = data.lessons.filter((lesson) => lesson.status !== 'cancelled');
+  const lessonsById = new Map(data.lessons.map((lesson) => [lesson.id, lesson]));
   const groupLessonCounts = new Map();
   const groupWeeks = new Map();
   for (const lesson of lessons) {
@@ -43,6 +45,21 @@ export function checkCampusData(data) {
       pairs.has(`${lesson.teacherId}/${lesson.groupId}/${lesson.subjectId}`),
       `Teacher not assigned to lesson: ${lesson.id}`,
     );
+    if (lesson.kind === 'srsp') {
+      const practice = lessonsById.get(lesson.practiceId);
+      assert.ok(practice, `Missing practice for SRSP: ${lesson.id}`);
+      assert.equal(normalizeLessonKind(practice.kind), 'practice');
+      assert.equal(practice.status, 'scheduled');
+      for (const field of ['groupId', 'subjectId']) {
+        assert.equal(lesson[field], practice[field], `SRSP ${field} mismatch: ${lesson.id}`);
+      }
+      for (const field of ['roomId', 'startsAt', 'endsAt', 'slotId']) {
+        assert.equal(lesson[field], null, `SRSP must not reserve ${field}: ${lesson.id}`);
+      }
+      assert.equal(lesson.date, campusDate(practice.startsAt));
+      continue;
+    }
+    assert.equal(lesson.practiceId ?? null, null);
     const room = rooms.get(lesson.roomId);
     assert.ok(room, `Unknown lesson room: ${lesson.id}`);
     assert.ok(
@@ -59,12 +76,24 @@ export function checkCampusData(data) {
     if (!groupWeeks.has(lesson.groupId)) groupWeeks.set(lesson.groupId, new Set());
     groupWeeks.get(lesson.groupId).add(monday.toISOString().slice(0, 10));
     assert.ok(!['Sat', 'Sun'].includes(parts.weekday), `Weekend lesson: ${lesson.id}`);
-    assert.ok(starts.has(`${parts.hour}:${parts.minute}`), `Nonstandard lesson time: ${lesson.id}`);
-    assert.equal(
-      Date.parse(lesson.endsAt) - Date.parse(lesson.startsAt),
-      80 * 60000,
-      `Expected an 80 minute lesson: ${lesson.id}`,
-    );
+    if (lesson.slotId != null) {
+      const interval = lessonInterval(campusDate(lesson.startsAt), lesson.slotId);
+      assert.equal(lesson.startsAt, interval.startsAt, `Incorrect slot start: ${lesson.id}`);
+      assert.equal(lesson.endsAt, interval.endsAt, `Incorrect slot end: ${lesson.id}`);
+      assert.equal(lesson.date, interval.date, `Incorrect lesson date: ${lesson.id}`);
+      assert.equal(Date.parse(lesson.endsAt) - Date.parse(lesson.startsAt), 50 * 60000);
+    } else {
+      // Preserve the timetable of historical seed records during migration.
+      assert.ok(
+        starts.has(`${parts.hour}:${parts.minute}`),
+        `Nonstandard lesson time: ${lesson.id}`,
+      );
+      assert.equal(
+        Date.parse(lesson.endsAt) - Date.parse(lesson.startsAt),
+        80 * 60000,
+        `Expected an 80 minute legacy lesson: ${lesson.id}`,
+      );
+    }
   }
   for (const group of data.groups) {
     assert.ok(
@@ -85,6 +114,7 @@ export function checkCampusData(data) {
   for (const resource of ['teacherId', 'groupId', 'roomId']) {
     const calendars = new Map();
     for (const lesson of lessons) {
+      if (lesson.kind === 'srsp') continue;
       if (!calendars.has(lesson[resource])) calendars.set(lesson[resource], []);
       calendars.get(lesson[resource]).push(lesson);
     }

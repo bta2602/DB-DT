@@ -19,6 +19,9 @@ import {
   gradeLabel,
   numericGrade,
   lessonStatus,
+  lessonDay,
+  lessonSortKey,
+  lessonKindLabel,
   roles,
   statusNames,
 } from '@/lib/studyhub/client-utils';
@@ -89,7 +92,7 @@ function AssignmentCards({
               </small>
             </div>
             <h3>{assignment.title}</h3>
-            <p>{t(assignment.type)}</p>
+            <p>{t(lessonKindLabel(assignment.type))}</p>
             {flag && (
               <Badge kind={flag === 'overdue' ? 'red' : 'amber'}>{deadlineText[flag]}</Badge>
             )}
@@ -249,10 +252,10 @@ export function StudentToday() {
     .filter(
       (lesson) =>
         lesson.groupId === user?.groupId &&
-        dateKey(lesson.startsAt) === today &&
+        lessonDay(lesson) === today &&
         lesson.status !== 'cancelled',
     )
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
   const tasks = data.assignments
     .filter(
       (assignment) =>
@@ -309,8 +312,8 @@ export function StudentToday() {
                   return (
                     <div key={lesson.id} className="publication-lesson">
                       <div className="lesson-time">
-                        {formatTime(lesson.startsAt)}
-                        <small>{formatTime(lesson.endsAt)}</small>
+                        {lesson.kind === 'srsp' ? t('СРСП') : formatTime(lesson.startsAt)}
+                        {lesson.endsAt && <small>{formatTime(lesson.endsAt)}</small>}
                       </div>
                       <span className="subject-icon">
                         <Icon name="book" />
@@ -320,12 +323,17 @@ export function StudentToday() {
                           {data.subjects.find((item) => item.id === lesson.subjectId)?.name}
                         </strong>
                         <p>
-                          {lesson.kind} ·{' '}
+                          {t(lessonKindLabel(lesson.kind))} ·{' '}
                           {data.users.find((item) => item.id === lesson.teacherId)?.name}
                         </p>
                         <small>
                           {data.groups.find((item) => item.id === lesson.groupId)?.name}{' '}
-                          {t('· Ауд.')} {data.rooms.find((item) => item.id === lesson.roomId)?.name}
+                          {lesson.roomId && (
+                            <>
+                              {t('· Ауд.')}{' '}
+                              {data.rooms.find((item) => item.id === lesson.roomId)?.name}
+                            </>
+                          )}
                         </small>
                       </div>
                       <Badge kind={status === 'current' ? '' : 'neutral'}>
@@ -449,7 +457,7 @@ export function TasksPage() {
             <option value="">{labels.allTypes}</option>
             {types.map((item) => (
               <option key={item} value={item}>
-                {t(item)}
+                {t(lessonKindLabel(item))}
               </option>
             ))}
           </select>
@@ -534,8 +542,8 @@ function subjectGrades(data: Bootstrap, studentId: string | undefined, subjectId
       ? [
           {
             id: `lesson-${lesson.id}`,
-            title: lesson.kind,
-            date: lesson.startsAt,
+            title: lessonKindLabel(lesson.kind),
+            date: lesson.startsAt || lesson.date,
             grade: numericGrade(grade),
             label: String(gradeLabel(grade)),
             comment: '',

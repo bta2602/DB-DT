@@ -15,6 +15,7 @@ export const statusNames: Record<string, string> = {
   upcoming: 'Предстоит',
   finished: 'Завершено',
   cancelled: 'Отменено',
+  selfStudy: 'СРСП',
 };
 export const initials = (name = '') =>
   name
@@ -79,6 +80,18 @@ export function formatDate(value?: string | null, locale: keyof typeof localeTag
 }
 export const formatTime = (value?: string | null) =>
   value ? timeFormatter.format(new Date(value)) : '—';
+export function lessonDay(lesson: Pick<Lesson, 'date' | 'startsAt'>) {
+  return lesson.date || (lesson.startsAt ? dateKey(lesson.startsAt) : '');
+}
+export function lessonSortKey(lesson: Pick<Lesson, 'date' | 'startsAt'>) {
+  return lesson.startsAt || `${lesson.date}T23:59:59+05:00`;
+}
+export function lessonKindLabel(kind: string) {
+  return (
+    ({ lecture: 'Лекция', practice: 'Практика', srsp: 'СРСП' } as Record<string, string>)[kind] ||
+    kind
+  );
+}
 export function average(values: (number | string | null | undefined)[]) {
   const marks = values
     .filter(
@@ -106,6 +119,7 @@ export function lessonStatus(
   now = Date.now(),
 ) {
   if (lesson.status === 'cancelled') return 'cancelled';
+  if (!lesson.startsAt || !lesson.endsAt) return 'selfStudy';
   if (+new Date(lesson.endsAt) <= now) return 'finished';
   return +new Date(lesson.startsAt) <= now ? 'current' : 'upcoming';
 }
@@ -113,13 +127,17 @@ export function lessonConflicts(
   candidate: Partial<Lesson> & Pick<Lesson, 'startsAt' | 'endsAt'>,
   lessons: Lesson[],
 ) {
-  if (candidate.status === 'cancelled') return [];
+  if (candidate.status === 'cancelled' || !candidate.startsAt || !candidate.endsAt) return [];
+  const startsAt = candidate.startsAt;
+  const endsAt = candidate.endsAt;
   return lessons.filter(
     (lesson) =>
       lesson.id !== candidate.id &&
       lesson.status !== 'cancelled' &&
-      +new Date(lesson.startsAt) < +new Date(candidate.endsAt) &&
-      +new Date(candidate.startsAt) < +new Date(lesson.endsAt) &&
+      lesson.startsAt !== null &&
+      lesson.endsAt !== null &&
+      +new Date(lesson.startsAt) < +new Date(endsAt) &&
+      +new Date(startsAt) < +new Date(lesson.endsAt) &&
       (['groupId', 'teacherId', 'roomId'] as const).some(
         (key) => lesson[key] && candidate[key] && lesson[key] === candidate[key],
       ),
@@ -132,6 +150,9 @@ export function emptyData(): Bootstrap {
     subjects: [],
     rooms: [],
     teachingAssignments: [],
+    teacherSubjects: [],
+    teacherLanguages: [],
+    groupSubjects: [],
     lessons: [],
     assignments: [],
     submissions: [],

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { TestClient, upload } from './http-client.mjs';
 import { checkCampusData } from './campus-checks.mjs';
+import { campusDate, lessonInterval, lessonPeriod } from '../lib/studyhub/lesson-rules.mjs';
 
 const baseUrl = process.env.TEST_BASE_URL || 'http://127.0.0.1:3101';
 assert.ok(
@@ -13,6 +14,7 @@ assert.ok(
 test('StudyHUB: API, permissions, forms and page routes', async (t) => {
   const suffix = randomUUID().slice(0, 8);
   const password = `${randomUUID()}A9!`;
+  const lessonDay = campusDate(Date.now() - 2 * 86400000);
   const admin = new TestClient(baseUrl);
   const teacher = new TestClient(baseUrl);
   const student = new TestClient(baseUrl);
@@ -140,6 +142,7 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
         name: `Группа ${suffix}`,
         course: 2,
         curatorId: teacherUser.id,
+        language: 'ru',
       },
     });
     await admin.call('/api/subjects', { method: 'POST', body: { name: `Предмет ${suffix}` } });
@@ -166,6 +169,27 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
     data = await admin.bootstrap();
     studentUser = data.users.find((user) => user.email === `student-${suffix}@example.test`);
     assert.equal(studentUser.groupId, group.id);
+    await admin.call('/api/academic/teacher-subjects', {
+      method: 'PUT',
+      body: { teacherId: teacherUser.id, subjectIds: [subject.id] },
+    });
+    await admin.call('/api/academic/teacher-languages', {
+      method: 'PUT',
+      body: { teacherId: teacherUser.id, languages: ['ru'] },
+    });
+    // The selected lesson can be in the preceding semester around New Year/September.
+    const periods = new Map(
+      [lessonDay, campusDate()].map((date) => {
+        const period = lessonPeriod(date);
+        return [`${period.academicYear}:${period.semester}`, period];
+      }),
+    );
+    for (const period of periods.values()) {
+      await admin.call('/api/academic/group-subjects', {
+        method: 'PUT',
+        body: { groupId: group.id, subjectIds: [subject.id], ...period },
+      });
+    }
     await admin.call('/api/teaching-assignments', {
       method: 'PUT',
       body: {
@@ -294,16 +318,15 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
   });
 
   await t.test('Schedule creation, conflict prevention, cancellation and restoration', async () => {
-    const start = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    start.setUTCHours(4, 0, 0, 0);
+    const first = lessonInterval(lessonDay, 'p1');
     const input = {
       groupId: group.id,
       subjectId: subject.id,
       teacherId: teacherUser.id,
       roomId: room.id,
-      startsAt: start.toISOString(),
-      endsAt: new Date(+start + 45 * 60000).toISOString(),
-      kind: 'Практика',
+      startsAt: first.startsAt,
+      endsAt: first.endsAt,
+      kind: 'practice',
       status: 'scheduled',
       note: `Проверка ${suffix}`,
     };
@@ -347,8 +370,8 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
       method: 'POST',
       body: {
         ...input,
-        startsAt: input.endsAt,
-        endsAt: new Date(+start + 90 * 60000).toISOString(),
+        startsAt: lessonInterval(lessonDay, 'p2').startsAt,
+        endsAt: lessonInterval(lessonDay, 'p2').endsAt,
         note: 'Следующая пара',
       },
     });
@@ -505,7 +528,7 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
   await t.test('Teacher publishes an assignment and student sees it', async () => {
     const input = {
       title: `Лабораторная ${suffix}`,
-      type: 'Лабораторная работа',
+      lessonId: lesson.id,
       description: 'Создайте таблицу студентов и напишите SELECT.',
       steps: ['Создать таблицу', 'Добавить запрос'],
       subjectId: subject.id,
@@ -528,6 +551,8 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
     );
     assignment = (await student.bootstrap()).assignments.find((row) => row.title === input.title);
     assert.equal(assignment.teacherId, teacherUser.id);
+    assert.equal(assignment.lessonId, lesson.id);
+    assert.equal(assignment.type, 'practice');
   });
 
   await t.test('File upload checks formats and stores actual SQL contents', async () => {

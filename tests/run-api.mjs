@@ -103,6 +103,9 @@ try {
       'tests/grading.test.mjs',
       'tests/i18n.test.mjs',
       'tests/storage.test.mjs',
+      'tests/academic-rules.test.mjs',
+      'tests/academic-migration.test.mjs',
+      'tests/academic-client.test.mjs',
     ],
     {
       STUDYHUB_TEST_STORAGE_DIR: join(directory, 'ordinary-database'),
@@ -113,6 +116,7 @@ try {
   });
   await startServer();
   await run(['--test', '--test-reporter=spec', 'tests/api.test.mjs']);
+  await run(['--test', '--test-reporter=spec', 'tests/academic-api.test.mjs']);
 
   // Keep the cookie and expected records in memory, then restart the real process.
   const client = new TestClient(baseUrl);

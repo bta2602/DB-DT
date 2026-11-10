@@ -26,6 +26,16 @@ import { useStudyHub } from './context';
 import { useI18n } from './preferences';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading } from './shared';
 import { AnnouncementsPanel } from './publication-panels';
+import { useBrowserStorage } from './use-browser-storage';
+import { StorageFeedback } from './storage-feedback';
+import {
+  defaultTaskFilters,
+  isStudentTaskFilters,
+  normalizeTaskFilters,
+  studentFilterLabels,
+  taskStatuses,
+  type StudentTaskFilters,
+} from '@/lib/studyhub/student-task-filters';
 
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : 'Не удалось выполнить действие. Попробуйте ещё раз.';
@@ -79,7 +89,7 @@ function AssignmentCards({
               </small>
             </div>
             <h3>{assignment.title}</h3>
-            <p>{assignment.type}</p>
+            <p>{t(assignment.type)}</p>
             {flag && (
               <Badge kind={flag === 'overdue' ? 'red' : 'amber'}>{deadlineText[flag]}</Badge>
             )}
@@ -362,11 +372,15 @@ export function StudentToday() {
 export function TasksPage() {
   const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
-  const [status, setStatus] = useState('all');
-  const [query, setQuery] = useState('');
-  const [deadline, setDeadline] = useState<DeadlineFilter>('all');
+  const stored = useBrowserStorage({
+    userId: user?.id,
+    area: 'filters',
+    entityId: 'tasks',
+    fallback: defaultTaskFilters,
+    validate: isStudentTaskFilters,
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const statuses = ['all', 'missing', 'submitted', 'revision', 'reviewed'] as const;
+  const labels = studentFilterLabels[locale];
   const deadlineText = deadlineLabels[locale];
   const submissions = new Map(
     data.submissions
@@ -374,6 +388,15 @@ export function TasksPage() {
       .map((item) => [item.assignmentId, item]),
   );
   const ownAssignments = data.assignments.filter((item) => item.groupId === user?.groupId);
+  const filters = normalizeTaskFilters(stored.value, ownAssignments);
+  const { status, query, deadline, subjectId, type } = filters;
+  function changeFilters(patch: Partial<StudentTaskFilters>) {
+    stored.setValue({ ...filters, ...patch });
+  }
+  const subjects = data.subjects.filter((subject) =>
+    ownAssignments.some((item) => item.subjectId === subject.id),
+  );
+  const types = [...new Set(ownAssignments.map((item) => item.type))];
   const overdueCount = ownAssignments.filter((item) =>
     matchesDeadline(item.dueAt, assignmentStatus(submissions.get(item.id)), 'overdue', now),
   ).length;
@@ -382,13 +405,17 @@ export function TasksPage() {
       const workStatus = assignmentStatus(submissions.get(item.id));
       return (
         (status === 'all' || workStatus === status) &&
+        (!subjectId || item.subjectId === subjectId) &&
+        (!type || item.type === type) &&
         item.title.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)) &&
         matchesDeadline(item.dueAt, workStatus, deadline, now)
       );
     })
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const selected = ownAssignments.find((item) => item.id === selectedId);
-  const filtering = Boolean(query.trim() || status !== 'all' || deadline !== 'all');
+  const filtering = Boolean(
+    query.trim() || status !== 'all' || deadline !== 'all' || subjectId || type,
+  );
   return (
     <>
       <PageHeading
@@ -399,10 +426,39 @@ export function TasksPage() {
         {deadlineText.count}: {overdueCount}
       </p>
       <div className="publication-toolbar">
+        <Field label={labels.subject}>
+          <select
+            value={subjectId}
+            disabled={!stored.ready}
+            onChange={(event) => changeFilters({ subjectId: event.target.value })}
+          >
+            <option value="">{labels.allSubjects}</option>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={labels.type}>
+          <select
+            value={type}
+            disabled={!stored.ready}
+            onChange={(event) => changeFilters({ type: event.target.value })}
+          >
+            <option value="">{labels.allTypes}</option>
+            {types.map((item) => (
+              <option key={item} value={item}>
+                {t(item)}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label={deadlineText.title}>
           <select
             value={deadline}
-            onChange={(event) => setDeadline(event.target.value as DeadlineFilter)}
+            disabled={!stored.ready}
+            onChange={(event) => changeFilters({ deadline: event.target.value as DeadlineFilter })}
           >
             {deadlineFilters.map((item) => (
               <option key={item} value={item}>
@@ -412,13 +468,14 @@ export function TasksPage() {
           </select>
         </Field>
         <div className="tabs" role="group" aria-label={t('Статус задания')}>
-          {statuses.map((item) => (
+          {taskStatuses.map((item) => (
             <button
               type="button"
               key={item}
               className={item === status ? 'active' : ''}
               aria-pressed={item === status}
-              onClick={() => setStatus(item)}
+              disabled={!stored.ready}
+              onClick={() => changeFilters({ status: item })}
             >
               {item === 'all' ? t('Все') : t(statusNames[item])}
             </button>
@@ -428,20 +485,32 @@ export function TasksPage() {
           className="select"
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          maxLength={500}
+          disabled={!stored.ready}
+          onChange={(event) => changeFilters({ query: event.target.value })}
           placeholder={t('Найти задание…')}
           aria-label={t('Поиск задания')}
         />
+        <button
+          className="button"
+          type="button"
+          disabled={!stored.ready}
+          onClick={() => stored.reset()}
+        >
+          {labels.reset}
+        </button>
       </div>
+      <p className="small muted" role="status">
+        {labels.results}: {assignments.length}
+      </p>
+      <StorageFeedback status={stored.status} />
       {assignments.length ? (
         <AssignmentCards assignments={assignments} onOpen={setSelectedId} />
       ) : (
         <EmptyState
           title={filtering ? t('Задания не найдены') : t('Заданий пока нет')}
           description={
-            filtering
-              ? deadlineText.empty
-              : t('Новые задания появятся после публикации преподавателем.')
+            filtering ? labels.empty : t('Новые задания появятся после публикации преподавателем.')
           }
         />
       )}

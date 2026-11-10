@@ -24,6 +24,17 @@ import {
 import { useStudyHub } from './context';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading, Person } from './shared';
 import { AnnouncementsPanel } from './publication-panels';
+import { useBrowserStorage } from './use-browser-storage';
+import { StorageFeedback } from './storage-feedback';
+import {
+  emptyScheduleFilters,
+  isScheduleFilters,
+  matchesScheduleFilters,
+  normalizeScheduleFilters,
+  scheduleFilterLabels,
+  scheduleScope,
+  type ScheduleFilters,
+} from '@/lib/studyhub/schedule-filters';
 
 type DirectoryKind = 'users' | 'groups' | 'subjects' | 'rooms' | 'teachingAssignments';
 type DirectoryItem = User | Group | Subject | Room;
@@ -55,6 +66,71 @@ function SelectOptions({
           {item.name}
         </option>
       ))}
+    </>
+  );
+}
+
+function LessonFilters({
+  filters,
+  onChange,
+  scope,
+  user,
+  full = false,
+  disabled = false,
+}: {
+  filters: ScheduleFilters;
+  onChange: (next: ScheduleFilters) => void;
+  scope: ReturnType<typeof scheduleScope>;
+  user: User | null;
+  full?: boolean;
+  disabled?: boolean;
+}) {
+  const { t, locale } = useI18n();
+  const labels = scheduleFilterLabels[locale];
+  const select = (key: keyof ScheduleFilters) => (event: React.ChangeEvent<HTMLSelectElement>) =>
+    onChange({ ...filters, [key]: event.target.value });
+  return (
+    <>
+      {user?.role !== 'student' && (
+        <Field label={t('Группа')}>
+          <select disabled={disabled} value={filters.group} onChange={select('group')}>
+            <SelectOptions items={scope.groups} blank={t('Все группы')} />
+          </select>
+        </Field>
+      )}
+      {user?.role !== 'teacher' && (
+        <Field label={t('Преподаватель')}>
+          <select disabled={disabled} value={filters.teacher} onChange={select('teacher')}>
+            <SelectOptions items={scope.teachers} blank={labels.allTeachers} />
+          </select>
+        </Field>
+      )}
+      <Field label={t('Предмет')}>
+        <select disabled={disabled} value={filters.subject} onChange={select('subject')}>
+          <SelectOptions items={scope.subjects} blank={labels.allSubjects} />
+        </select>
+      </Field>
+      {full && (
+        <>
+          <Field label={t('Аудитория')}>
+            <select disabled={disabled} value={filters.room} onChange={select('room')}>
+              <SelectOptions items={scope.rooms} blank={labels.allRooms} />
+            </select>
+          </Field>
+          <Field label={t('Тип занятия')}>
+            <select disabled={disabled} value={filters.kind} onChange={select('kind')}>
+              <option value="">{labels.allKinds}</option>
+              {scope.kinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {kind === 'lecture' || kind === 'practice' || kind === 'srsp'
+                    ? labels[kind]
+                    : t(kind)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </>
+      )}
     </>
   );
 }
@@ -645,13 +721,18 @@ function LessonEditor({
 
 export function AdminOverview() {
   const { t, locale } = useI18n();
-  const { data, now } = useStudyHub();
+  const { data, user, now } = useStudyHub();
   const [editing, setEditing] = useState<Lesson | 'new' | null>(null);
-  const active = data.lessons
+  const [selection, setSelection] = useState(emptyScheduleFilters);
+  const scope = scheduleScope(data, user);
+  const filters = normalizeScheduleFilters(selection, scope, user);
+  const labels = scheduleFilterLabels[locale];
+  const filtered = scope.lessons.filter((lesson) => matchesScheduleFilters(lesson, filters));
+  const active = filtered
     .filter((lesson) => lessonStatus(lesson, now) === 'current')
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const today = dateKey(new Date(now));
-  const next = data.lessons
+  const next = filtered
     .filter(
       (lesson) => lessonStatus(lesson, now) === 'upcoming' && dateKey(lesson.startsAt) === today,
     )
@@ -669,6 +750,15 @@ export function AdminOverview() {
         }
       />
       <SetupHint onOpen={() => setEditing('new')} />
+      <div className="publication-toolbar">
+        <LessonFilters filters={filters} onChange={setSelection} scope={scope} user={user} />
+        <button type="button" className="button" onClick={() => setSelection(emptyScheduleFilters)}>
+          {labels.reset}
+        </button>
+      </div>
+      <p className="muted" role="status">
+        {labels.results}: {active.length + next.length}
+      </p>
       <Statistics
         items={[
           [active.length, t('Занятий идут сейчас'), 'calendar'],
@@ -678,8 +768,8 @@ export function AdminOverview() {
             'users',
           ],
           [
-            Math.max(0, data.rooms.length - new Set(active.map((lesson) => lesson.roomId)).size),
-            t('Свободных аудиторий'),
+            new Set(active.map((lesson) => lesson.roomId).filter(Boolean)).size,
+            labels.occupiedRooms,
             'building',
           ],
         ]}
@@ -718,33 +808,20 @@ export function SchedulePage() {
   const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
   const [date, setDate] = useState(() => dateKey(new Date(now)));
-  const [group, setGroup] = useState('');
-  const [teacher, setTeacher] = useState('');
-  const [room, setRoom] = useState('');
-  const [mode, setMode] = useState<'day' | 'week'>('day');
+  const storage = useBrowserStorage({
+    userId: user?.id,
+    area: 'filters',
+    entityId: 'schedule',
+    fallback: emptyScheduleFilters,
+    validate: isScheduleFilters,
+  });
+  const scope = scheduleScope(data, user);
+  const filters = normalizeScheduleFilters(storage.value, scope, user);
+  const mode = filters.mode;
+  const filtered = scope.lessons.filter((lesson) => matchesScheduleFilters(lesson, filters));
   const [editing, setEditing] = useState<Lesson | 'new' | null>(null);
   const admin = user?.role === 'admin';
-  const teachers = data.users.filter((item) => item.role === 'teacher');
-  const labels = {
-    ru: {
-      allTeachers: 'Все преподаватели',
-      allRooms: 'Все аудитории',
-      previous: 'Назад',
-      next: 'Вперёд',
-    },
-    kk: {
-      allTeachers: 'Барлық оқытушылар',
-      allRooms: 'Барлық аудиториялар',
-      previous: 'Артқа',
-      next: 'Алға',
-    },
-    en: {
-      allTeachers: 'All teachers',
-      allRooms: 'All rooms',
-      previous: 'Previous',
-      next: 'Next',
-    },
-  }[locale];
+  const labels = scheduleFilterLabels[locale];
 
   function moveDate(direction: -1 | 1) {
     const selected = new Date(`${date}T12:00:00Z`);
@@ -788,21 +865,14 @@ export function SchedulePage() {
             }}
           />
         </Field>
-        <Field label={t('Группа')}>
-          <select value={group} onChange={(event) => setGroup(event.target.value)}>
-            <SelectOptions items={data.groups} blank={t('Все группы')} />
-          </select>
-        </Field>
-        <Field label={t('Преподаватель')}>
-          <select value={teacher} onChange={(event) => setTeacher(event.target.value)}>
-            <SelectOptions items={teachers} blank={labels.allTeachers} />
-          </select>
-        </Field>
-        <Field label={t('Аудитория')}>
-          <select value={room} onChange={(event) => setRoom(event.target.value)}>
-            <SelectOptions items={data.rooms} blank={labels.allRooms} />
-          </select>
-        </Field>
+        <LessonFilters
+          filters={filters}
+          onChange={storage.setValue}
+          scope={scope}
+          user={user}
+          full
+          disabled={!storage.ready}
+        />
         <div className="tabs" aria-label={t('Вид расписания')}>
           {(['day', 'week'] as const).map((value) => (
             <button
@@ -810,7 +880,8 @@ export function SchedulePage() {
               key={value}
               className={mode === value ? 'active' : ''}
               aria-pressed={mode === value}
-              onClick={() => setMode(value)}
+              disabled={!storage.ready}
+              onClick={() => storage.setValue({ ...filters, mode: value })}
             >
               {value === 'day' ? t('День') : t('Неделя')}
             </button>
@@ -825,21 +896,23 @@ export function SchedulePage() {
         <button type="button" className="button" onClick={() => setDate(dateKey(new Date(now)))}>
           {t('Сегодня')}
         </button>
+        <button type="button" className="button" disabled={!storage.ready} onClick={storage.reset}>
+          {labels.reset}
+        </button>
       </div>
+      <StorageFeedback status={storage.status} />
+      <p className="muted" role="status">
+        {labels.results}:{' '}
+        {filtered.filter((lesson) => dates.includes(dateKey(lesson.startsAt))).length}
+      </p>
       {admin && <SetupHint onOpen={() => setEditing('new')} />}
       <div className={mode === 'week' ? 'publication-week' : ''}>
         {dates.map((day) => (
           <section key={day}>
             <h2 className="schedule-date-title">{formatDate(day, locale)}</h2>
             <LessonList
-              lessons={data.lessons
-                .filter(
-                  (lesson) =>
-                    dateKey(lesson.startsAt) === day &&
-                    (!group || lesson.groupId === group) &&
-                    (!teacher || lesson.teacherId === teacher) &&
-                    (!room || lesson.roomId === room),
-                )
+              lessons={filtered
+                .filter((lesson) => dateKey(lesson.startsAt) === day)
                 .sort((a, b) => a.startsAt.localeCompare(b.startsAt))}
               now={now}
               onEdit={admin ? setEditing : undefined}
@@ -859,9 +932,24 @@ export function SchedulePage() {
 }
 
 export function RoomsPage() {
-  const { t } = useI18n();
-  const { data, now } = useStudyHub();
+  const { t, locale } = useI18n();
+  const { data, now, user, ready, error } = useStudyHub();
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
+  const [occupancy, setOccupancy] = useState('');
+  const labels = scheduleFilterLabels[locale];
+  // Only the administrator's bootstrap contains the full school timetable.
+  const availabilityKnown = user?.role === 'admin' && ready && !error;
+  const occupied = new Map(
+    data.lessons
+      .filter((lesson) => lesson.roomId && lessonStatus(lesson, now) === 'current')
+      .map((lesson) => [lesson.roomId, lesson]),
+  );
+  const rooms = data.rooms.filter(
+    (room) =>
+      !occupancy ||
+      (availabilityKnown &&
+        (occupancy === 'busy' ? occupied.has(room.id) : !occupied.has(room.id))),
+  );
   return (
     <>
       <PageHeading
@@ -874,12 +962,29 @@ export function RoomsPage() {
           </button>
         }
       />
-      {data.rooms.length ? (
+      <div className="publication-toolbar">
+        <Field label={labels.occupancy}>
+          <select
+            value={occupancy}
+            disabled={!availabilityKnown}
+            onChange={(event) => setOccupancy(event.target.value)}
+          >
+            <option value="">{labels.allOccupancy}</option>
+            <option value="free">{t('Свободна')}</option>
+            <option value="busy">{labels.busy}</option>
+          </select>
+        </Field>
+        <button type="button" className="button" onClick={() => setOccupancy('')}>
+          {labels.reset}
+        </button>
+      </div>
+      <p className="muted" role="status">
+        {labels.found}: {rooms.length}
+      </p>
+      {rooms.length ? (
         <Table headers={[t('Аудитория'), t('Вместимость'), t('Сейчас'), t('Действие')]}>
-          {data.rooms.map((room) => {
-            const lesson = data.lessons.find(
-              (lesson) => lesson.roomId === room.id && lessonStatus(lesson, now) === 'current',
-            );
+          {rooms.map((room) => {
+            const lesson = occupied.get(room.id);
             return (
               <tr key={room.id}>
                 <td>
@@ -887,7 +992,9 @@ export function RoomsPage() {
                 </td>
                 <td>{room.capacity ?? '—'}</td>
                 <td>
-                  {lesson ? (
+                  {!availabilityKnown ? (
+                    '—'
+                  ) : lesson ? (
                     <>
                       {referenceName(data.subjects, lesson.subjectId)}
                       <br />
@@ -916,8 +1023,12 @@ export function RoomsPage() {
         </Table>
       ) : (
         <EmptyState
-          title={t('Аудитории ещё не добавлены')}
-          description={t('Добавьте помещения, чтобы составить расписание.')}
+          title={data.rooms.length ? t('Ничего не найдено') : t('Аудитории ещё не добавлены')}
+          description={
+            data.rooms.length
+              ? t('Измените поисковый запрос или фильтры.')
+              : t('Добавьте помещения, чтобы составить расписание.')
+          }
         />
       )}
       {editing && (
@@ -939,7 +1050,11 @@ export function PeoplePage() {
   const [query, setQuery] = useState('');
   const [role, setRole] = useState('');
   const [group, setGroup] = useState('');
+  const [course, setCourse] = useState('');
+  const [teacherSubject, setTeacherSubject] = useState('');
   const [page, setPage] = useState(0);
+  const labels = scheduleFilterLabels[locale];
+  const courses = [...new Set(data.groups.map((item) => item.course))].sort((a, b) => a - b);
   const search = query.trim().toLocaleLowerCase(locale);
   const matches = (...values: string[]) =>
     values.join(' ').toLocaleLowerCase(locale).includes(search);
@@ -948,9 +1063,15 @@ export function PeoplePage() {
       (user) =>
         (!role || user.role === role) &&
         (!group || user.groupId === group) &&
+        (!teacherSubject ||
+          data.teachingAssignments.some(
+            (item) => item.teacherId === user.id && item.subjectId === teacherSubject,
+          )) &&
         matches(user.name, user.email || '', referenceName(data.groups, user.groupId)),
     ),
-    groups: data.groups.filter((item) => matches(item.name)),
+    groups: data.groups.filter(
+      (item) => (!course || String(item.course) === course) && matches(item.name),
+    ),
     subjects: data.subjects.filter((item) => matches(item.name)),
     teachingAssignments: data.teachingAssignments.filter((item) =>
       matches(
@@ -1051,6 +1172,7 @@ export function PeoplePage() {
                 onChange={(event) => {
                   setRole(event.target.value);
                   setGroup('');
+                  setTeacherSubject('');
                   setPage(0);
                 }}
               >
@@ -1068,15 +1190,64 @@ export function PeoplePage() {
                 onChange={(event) => {
                   setGroup(event.target.value);
                   setRole(event.target.value ? 'student' : role);
+                  setTeacherSubject('');
                   setPage(0);
                 }}
               >
                 <SelectOptions items={data.groups} blank={t('Все группы')} />
               </select>
             </Field>
+            {role === 'teacher' && (
+              <Field label={t('Предмет')}>
+                <select
+                  value={teacherSubject}
+                  onChange={(event) => {
+                    setTeacherSubject(event.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <SelectOptions items={data.subjects} blank={labels.allSubjects} />
+                </select>
+              </Field>
+            )}
           </>
         )}
+        {tab === 'groups' && (
+          <Field label={t('Курс')}>
+            <select
+              value={course}
+              onChange={(event) => {
+                setCourse(event.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="">{labels.allCourses}</option>
+              {courses.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            setQuery('');
+            setRole('');
+            setGroup('');
+            setTeacherSubject('');
+            setCourse('');
+            setPage(0);
+          }}
+        >
+          {labels.reset}
+        </button>
       </div>
+      <p className="muted" role="status">
+        {labels.found}: {count}
+      </p>
       {!count ? (
         <EmptyState
           title={data[tab].length ? t('Ничего не найдено') : t('Пока пусто')}

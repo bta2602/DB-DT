@@ -676,7 +676,7 @@ dialog::backdrop {
   }
   .publication-toolbar .field {
     min-width: 0;
-    flex: 1;
+    flex: 1 1 160px;
   }
   .publication-toolbar > .tabs {
     width: 100%;

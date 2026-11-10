@@ -95,6 +95,10 @@ try {
     [
       '--test',
       '--test-reporter=spec',
+      'tests/browser-storage.test.mjs',
+      'tests/teacher-filters.test.mjs',
+      'tests/student-task-filters.test.mjs',
+      'tests/schedule-filters.test.mjs',
       'tests/deadlines.test.mjs',
       'tests/grading.test.mjs',
       'tests/i18n.test.mjs',

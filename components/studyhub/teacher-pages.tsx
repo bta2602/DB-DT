@@ -23,11 +23,24 @@ import {
   lessonStatus,
 } from '@/lib/studyhub/client-utils';
 import { downloadCsv } from '@/lib/studyhub/journal-csv';
+import { deadlineFilters, deadlineLabels, type DeadlineFilter } from '@/lib/studyhub/deadlines';
+import {
+  academicTypeLabel,
+  emptyJournalFilters,
+  emptyTeacherFilters,
+  isJournalFilters,
+  isTeacherTaskFilters,
+  teacherDeadlineMatches,
+  teacherUi,
+  type TeacherTaskFilters,
+} from '@/lib/studyhub/teacher-filters';
 import { ApiError, useStudyHub } from './context';
 import { useI18n } from './preferences';
 import { useTeacherDrafts, type ReviewDraft } from './teacher-context';
 import { AnnouncementsPanel, MaterialsPanel } from './publication-panels';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading, Person } from './shared';
+import { useBrowserStorage } from './use-browser-storage';
+import { StorageFeedback } from './storage-feedback';
 
 const workLabels = {
   submitted: 'На проверке',
@@ -66,6 +79,155 @@ function teacherScope(data: Bootstrap, user: User | null) {
     })),
   );
   return { pairs, groups, lessons, assignments, roster, subjects, records };
+}
+
+type TeacherScope = ReturnType<typeof teacherScope>;
+const defaultReviewFilters: TeacherTaskFilters = { ...emptyTeacherFilters, status: 'submitted' };
+function useTeacherTaskFilters(
+  scope: TeacherScope,
+  entityId = 'tasks',
+  fallback = emptyTeacherFilters,
+) {
+  const { user } = useStudyHub();
+  const storage = useBrowserStorage({
+    userId: user?.id,
+    area: 'filters',
+    entityId,
+    fallback,
+    validate: isTeacherTaskFilters,
+  });
+  const groupId = scope.groups.some((group) => group.id === storage.value.groupId)
+    ? storage.value.groupId
+    : '';
+  const subjects = groupId
+    ? scope.subjects(groupId)
+    : scope.groups.flatMap((group) => scope.subjects(group.id));
+  const subjectId = subjects.some((subject) => subject.id === storage.value.subjectId)
+    ? storage.value.subjectId
+    : '';
+  const available =
+    entityId === 'overview'
+      ? scope.lessons.map((item) => item.kind)
+      : scope.assignments.map((item) => item.type);
+  const type = available.includes(storage.value.type) ? storage.value.type : '';
+  const assignmentId = scope.assignments.some(
+    (assignment) =>
+      assignment.id === storage.value.assignmentId &&
+      (!groupId || assignment.groupId === groupId) &&
+      (!subjectId || assignment.subjectId === subjectId) &&
+      (!type || assignment.type === type),
+  )
+    ? storage.value.assignmentId
+    : '';
+  const filters = { ...storage.value, groupId, subjectId, type, assignmentId };
+  return {
+    ...storage,
+    filters,
+    update: (next: Partial<TeacherTaskFilters>) => storage.setValue({ ...filters, ...next }),
+  };
+}
+
+function TeacherFilterFields({
+  scope,
+  filters,
+  update,
+  kinds,
+  taskFields = true,
+}: {
+  scope: TeacherScope;
+  filters: TeacherTaskFilters;
+  update: (next: Partial<TeacherTaskFilters>) => void;
+  kinds: string[];
+  taskFields?: boolean;
+}) {
+  const { t, locale } = useI18n();
+  const labels = teacherUi[locale];
+  const subjects = [
+    ...new Map(
+      (filters.groupId
+        ? scope.subjects(filters.groupId)
+        : scope.groups.flatMap((group) => scope.subjects(group.id))
+      ).map((subject) => [subject.id, subject]),
+    ).values(),
+  ];
+  return (
+    <>
+      <Field label={t('Группа')}>
+        <select
+          value={filters.groupId}
+          onChange={(event) =>
+            update({ groupId: event.target.value, subjectId: '', type: '', assignmentId: '' })
+          }
+        >
+          <option value="">{t('Все мои группы')}</option>
+          {scope.groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label={t('Предмет')}>
+        <select
+          value={filters.subjectId}
+          onChange={(event) =>
+            update({ subjectId: event.target.value, type: '', assignmentId: '' })
+          }
+        >
+          <option value="">{labels.allSubjects}</option>
+          {subjects.map((subject) => (
+            <option key={subject.id} value={subject.id}>
+              {subject.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label={t('Тип')}>
+        <select
+          value={filters.type}
+          onChange={(event) => update({ type: event.target.value, assignmentId: '' })}
+        >
+          <option value="">{labels.allTypes}</option>
+          {[...new Set(kinds)].map((kind) => (
+            <option key={kind} value={kind}>
+              {t(academicTypeLabel(kind, locale))}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {taskFields && (
+        <>
+          <Field label={t('Статус')}>
+            <select
+              value={filters.status}
+              onChange={(event) =>
+                update({ status: event.target.value as TeacherTaskFilters['status'] })
+              }
+            >
+              <option value="all">{labels.allStatuses}</option>
+              {(Object.keys(workLabels) as WorkStatus[]).map((status) => (
+                <option key={status} value={status}>
+                  {t(workLabels[status])}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={deadlineLabels[locale].title}>
+            <select
+              value={filters.deadline}
+              onChange={(event) => update({ deadline: event.target.value as DeadlineFilter })}
+            >
+              {deadlineFilters.map((filter) => (
+                <option key={filter} value={filter}>
+                  {deadlineLabels[locale][filter]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </>
+      )}
+    </>
+  );
 }
 
 function WorkBadge({ status }: { status: WorkStatus }) {
@@ -140,12 +302,25 @@ export function TeacherToday() {
   const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
   const scope = teacherScope(data, user);
+  const storage = useTeacherTaskFilters(scope, 'overview');
+  const { filters } = storage;
   const lessons = scope.lessons
-    .filter((lesson) => dateKey(lesson.startsAt) === dateKey(new Date(now)))
+    .filter(
+      (lesson) =>
+        dateKey(lesson.startsAt) === dateKey(new Date(now)) &&
+        (!filters.groupId || lesson.groupId === filters.groupId) &&
+        (!filters.subjectId || lesson.subjectId === filters.subjectId) &&
+        (!filters.type || lesson.kind === filters.type),
+    )
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const current = lessons.find((lesson) => lessonStatus(lesson, now) === 'current');
   const next = lessons.find((lesson) => lessonStatus(lesson, now) === 'upcoming');
-  const pending = scope.records.filter((record) => record.work?.status === 'submitted').length;
+  const pending = scope.records.filter(
+    (record) =>
+      record.work?.status === 'submitted' &&
+      (!filters.groupId || record.assignment.groupId === filters.groupId) &&
+      (!filters.subjectId || record.assignment.subjectId === filters.subjectId),
+  ).length;
   return (
     <>
       <PageHeading
@@ -161,11 +336,39 @@ export function TeacherToday() {
           </Link>
         }
       />
+      <div className="teacher-toolbar">
+        <fieldset
+          className="teacher-filters"
+          disabled={!storage.ready}
+          style={{ border: 0, padding: 0, minWidth: 0 }}
+        >
+          <TeacherFilterFields
+            scope={scope}
+            filters={filters}
+            update={storage.update}
+            kinds={scope.lessons.map((lesson) => lesson.kind)}
+            taskFields={false}
+          />
+          <button type="button" className="button small" onClick={storage.reset}>
+            {teacherUi[locale].reset}
+          </button>
+        </fieldset>
+        <p aria-live="polite">
+          {teacherUi[locale].results}: {lessons.length}
+        </p>
+      </div>
+      <StorageFeedback status={storage.status} />
       <div className="teacher-stats">
         {[
           ['calendar', lessons.length, t('Занятий сегодня')],
-          ['tasks', pending, t('Работ на проверке')],
-          ['users', scope.groups.length, t('Учебных групп')],
+          filters.type
+            ? [
+                'calendar',
+                lessons.filter((lesson) => lessonStatus(lesson, now) === 'current').length,
+                t('Сейчас на занятии'),
+              ]
+            : ['tasks', pending, t('Работ на проверке')],
+          ['users', new Set(lessons.map((lesson) => lesson.groupId)).size, t('Учебных групп')],
         ].map(([icon, count, label]) => (
           <div className="teacher-stat" key={String(label)}>
             <span className="stat-icon">
@@ -200,7 +403,9 @@ export function TeacherToday() {
               '/review',
               'tasks',
               t('Проверка работ'),
-              t('{value0} работ ждут обратной связи', { value0: String(pending) }),
+              filters.type
+                ? t('Оценка и обратная связь')
+                : t('{value0} работ ждут обратной связи', { value0: String(pending) }),
             ],
             ['/assignments', 'file', t('Мои задания'), t('Условия, сроки и прогресс группы')],
           ].map(([href, icon, label, description]) => (
@@ -391,16 +596,28 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
   const { data, user, now } = useStudyHub();
   const scope = teacherScope(data, user);
   const requestedLesson = scope.lessons.find((lesson) => lesson.id === requestedLessonId);
-  const [selectedGroup, setSelectedGroup] = useState(requestedLesson?.groupId || '');
+  const storage = useBrowserStorage({
+    userId: user?.id,
+    area: 'filters',
+    entityId: 'journal',
+    fallback: emptyJournalFilters,
+    validate: isJournalFilters,
+  });
+  const [fromLink, setFromLink] = useState(Boolean(requestedLesson));
+  const selectedGroup = fromLink ? requestedLesson?.groupId || '' : storage.value.groupId;
   const groupId = scope.groups.some((group) => group.id === selectedGroup)
     ? selectedGroup
     : scope.groups[0]?.id || '';
   const subjects = scope.subjects(groupId);
-  const [selectedSubject, setSelectedSubject] = useState(requestedLesson?.subjectId || '');
+  const selectedSubject = fromLink ? requestedLesson?.subjectId || '' : storage.value.subjectId;
   const subjectId = subjects.some((subject) => subject.id === selectedSubject)
     ? selectedSubject
     : subjects[0]?.id || '';
-  const [query, setQuery] = useState('');
+  const query = storage.value.query;
+  const updateFilters = (next: Partial<typeof emptyJournalFilters>) => {
+    setFromLink(false);
+    storage.setValue({ groupId, subjectId, query, ...next });
+  };
   const [editing, setEditing] = useState<{ lessonId: string; studentId: string } | null>(null);
   const students = scope.roster(groupId);
   const visibleStudents = students.filter((student) =>
@@ -508,11 +725,10 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
               <Field label={t('Учебная группа')}>
                 <select
                   aria-label={t('Группа журнала')}
+                  disabled={!storage.ready}
                   value={groupId}
                   onChange={(event) => {
-                    setSelectedGroup(event.target.value);
-                    setSelectedSubject('');
-                    setQuery('');
+                    updateFilters({ groupId: event.target.value, subjectId: '', query: '' });
                   }}
                 >
                   {scope.groups.map((group) => (
@@ -525,8 +741,9 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
               <Field label={t('Предмет')}>
                 <select
                   aria-label={t('Предмет журнала')}
+                  disabled={!storage.ready}
                   value={subjectId}
-                  onChange={(event) => setSelectedSubject(event.target.value)}
+                  onChange={(event) => updateFilters({ subjectId: event.target.value })}
                 >
                   {subjects.map((subject) => (
                     <option key={subject.id} value={subject.id}>
@@ -540,12 +757,30 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
               <Icon name="search" className="sm" />
               <input
                 aria-label={t('Поиск студента')}
+                disabled={!storage.ready}
                 placeholder={t('Поиск студента…')}
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => updateFilters({ query: event.target.value })}
               />
             </label>
           </div>
+          <div className="teacher-toolbar">
+            <button
+              type="button"
+              className="button small"
+              disabled={!storage.ready}
+              onClick={() => {
+                setFromLink(false);
+                storage.reset();
+              }}
+            >
+              {teacherUi[locale].reset}
+            </button>
+            <p aria-live="polite">
+              {teacherUi[locale].results}: {visibleStudents.length}
+            </p>
+          </div>
+          <StorageFeedback status={storage.status} />
           {!columns.length ? (
             <EmptyState
               title={t('Нет занятий или заданий')}
@@ -798,7 +1033,7 @@ function ReviewWorkspace({
   onNext: () => void;
 }) {
   const { t, locale } = useI18n();
-  const { data, mutate, notify } = useStudyHub();
+  const { data, mutate, notify, refresh } = useStudyHub();
   const drafts = useTeacherDrafts();
   const draft = drafts.reviews[work.id] || {
     grade: work.status === 'reviewed' ? work.grade : null,
@@ -808,16 +1043,22 @@ function ReviewWorkspace({
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState('');
+  const [conflict, setConflict] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const stale = conflict || draft.version !== work.version;
+  const labels = teacherUi[locale];
   function update(next: ReviewDraft) {
     const initialGrade = work.status === 'reviewed' ? work.grade : null;
     drafts.setReview(
       work.id,
-      next.grade === initialGrade && next.comment === work.comment ? null : next,
+      next.version === work.version && next.grade === initialGrade && next.comment === work.comment
+        ? null
+        : next,
     );
     setError('');
   }
   async function publish(action: 'grade' | 'return', next = false) {
-    if (lock.current) return;
+    if (lock.current || !drafts.ready || stale) return;
     if (
       action === 'grade' &&
       (draft.grade == null ||
@@ -842,11 +1083,15 @@ function ReviewWorkspace({
         comment: draft.comment.trim(),
         version: draft.version,
       });
-      drafts.setReview(work.id, null);
+      drafts.finishReview(work.id, draft);
       notify(action === 'return' ? t('Работа возвращена на доработку.') : t('Оценка сохранена.'));
       if (next) onNext();
     } catch (error) {
       setError(errorMessage(error));
+      if (error instanceof ApiError && error.status === 409) {
+        setConflict(true);
+        setComparing(false);
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -898,6 +1143,58 @@ function ReviewWorkspace({
           )}
           <h2>{t('Оценка и обратная связь')}</h2>
           <p className="caption">{t('Результат появится у студента после сохранения.')}</p>
+          <StorageFeedback status={drafts.status} />
+          {stale && (
+            <section className="review-published" aria-live="polite">
+              <p>{labels.stale}</p>
+              <button
+                type="button"
+                className="button small"
+                disabled={busy}
+                onClick={async () => {
+                  if (lock.current) return;
+                  lock.current = true;
+                  setBusy(true);
+                  setComparing(false);
+                  try {
+                    await refresh();
+                    setComparing(true);
+                    setError('');
+                  } catch (error) {
+                    setError(errorMessage(error));
+                  } finally {
+                    lock.current = false;
+                    setBusy(false);
+                  }
+                }}
+              >
+                {labels.compare}
+              </button>
+              {comparing && (
+                <div className="mt">
+                  <strong>{labels.current}</strong>
+                  <p>
+                    {labels.version}: {work.version} · {t(workLabels[work.status])} ·{' '}
+                    {work.grade ?? '—'}
+                  </p>
+                  <p style={{ whiteSpace: 'pre-wrap' }}>{work.comment || labels.noComment}</p>
+                  <button
+                    type="button"
+                    className="button small"
+                    disabled={busy || !drafts.ready}
+                    onClick={() => {
+                      drafts.setReview(work.id, { ...draft, version: work.version });
+                      setConflict(false);
+                      setComparing(false);
+                      setError('');
+                    }}
+                  >
+                    {labels.confirm}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
           <Field label={t('Баллы за работу (0–100)')}>
             <input
               type="number"
@@ -907,7 +1204,7 @@ function ReviewWorkspace({
               step={1}
               aria-label={t('Баллы за работу (0–100)')}
               value={draft.grade ?? ''}
-              disabled={busy}
+              disabled={busy || !drafts.ready}
               onChange={(event) =>
                 update({
                   ...draft,
@@ -921,7 +1218,7 @@ function ReviewWorkspace({
               aria-label={t('Комментарий студенту')}
               maxLength={2000}
               placeholder={t('Что получилось и что стоит улучшить…')}
-              disabled={busy}
+              disabled={busy || !drafts.ready}
               value={draft.comment}
               onChange={(event) => update({ ...draft, comment: event.target.value })}
             />
@@ -935,7 +1232,7 @@ function ReviewWorkspace({
               <button
                 type="button"
                 key={text}
-                disabled={busy}
+                disabled={busy || !drafts.ready}
                 onClick={() =>
                   update({
                     ...draft,
@@ -958,6 +1255,8 @@ function ReviewWorkspace({
               className="button primary full"
               disabled={
                 busy ||
+                !drafts.ready ||
+                stale ||
                 draft.grade == null ||
                 !Number.isInteger(draft.grade) ||
                 draft.grade < 0 ||
@@ -973,6 +1272,8 @@ function ReviewWorkspace({
               className="button full"
               disabled={
                 busy ||
+                !drafts.ready ||
+                stale ||
                 draft.grade == null ||
                 !Number.isInteger(draft.grade) ||
                 draft.grade < 0 ||
@@ -985,11 +1286,26 @@ function ReviewWorkspace({
             <button
               type="button"
               className="button full"
-              disabled={busy}
+              disabled={busy || !drafts.ready || stale}
               onClick={() => void publish('return')}
             >
               {t('Вернуть на доработку')}{' '}
             </button>
+            {drafts.reviews[work.id] && (
+              <button
+                type="button"
+                className="button full"
+                disabled={busy || !drafts.ready}
+                onClick={() => {
+                  drafts.setReview(work.id, null);
+                  setConflict(false);
+                  setComparing(false);
+                  setError('');
+                }}
+              >
+                {labels.discard}
+              </button>
+            )}
           </div>
           <p className="caption mt">
             {t('Для доработки обязательно укажите, что нужно исправить.')}
@@ -1021,25 +1337,47 @@ function ReviewContent({
   initialAssignmentId: string;
 }) {
   const { t, locale } = useI18n();
-  const { data, user } = useStudyHub();
+  const { data, user, now } = useStudyHub();
   const scope = teacherScope(data, user);
   const [selectedId, setSelectedId] = useState<string | null>(initialWorkId || null);
-  const [status, setStatus] = useState<WorkStatus>('submitted');
-  const [groupId, setGroupId] = useState('');
-  const [assignmentId, setAssignmentId] = useState(initialAssignmentId);
-  const [query, setQuery] = useState('');
+  const storage = useTeacherTaskFilters(scope, 'tasks', defaultReviewFilters);
+  const [fromLink, setFromLink] = useState(Boolean(initialAssignmentId));
+  const linkedAssignment = fromLink
+    ? scope.assignments.find((item) => item.id === initialAssignmentId)
+    : undefined;
+  const filters = linkedAssignment
+    ? {
+        ...storage.filters,
+        groupId: linkedAssignment.groupId,
+        subjectId: linkedAssignment.subjectId,
+        type: '',
+        assignmentId: linkedAssignment.id,
+        deadline: 'all' as const,
+        query: '',
+      }
+    : storage.filters;
+  const { groupId, assignmentId, query, status } = filters;
+  const updateFilters = (next: Partial<TeacherTaskFilters>) => {
+    setFromLink(false);
+    storage.setValue({ ...filters, ...next });
+  };
   const [info, setInfo] = useState<Assignment | null>(null);
-  const rows = scope.records
+  const filteredRecords = scope.records
     .filter(
       (record) =>
         (!groupId || record.assignment.groupId === groupId) &&
         (!assignmentId || record.assignment.id === assignmentId) &&
-        (record.work?.status || 'missing') === status &&
+        (!filters.subjectId || record.assignment.subjectId === filters.subjectId) &&
+        (!filters.type || record.assignment.type === filters.type) &&
+        teacherDeadlineMatches(record.assignment.dueAt, filters.deadline, now) &&
         `${record.student.name} ${record.assignment.title}`
-          .toLocaleLowerCase('ru')
-          .includes(query.trim().toLocaleLowerCase('ru')),
+          .toLocaleLowerCase(locale)
+          .includes(query.trim().toLocaleLowerCase(locale)),
     )
     .sort((a, b) => (a.work?.submittedAt || '').localeCompare(b.work?.submittedAt || ''));
+  const rows = filteredRecords.filter(
+    (record) => status === 'all' || (record.work?.status || 'missing') === status,
+  );
   const selected = scope.records.find((record) => record.work?.id === selectedId);
   if (selected?.work) {
     const index = rows.findIndex((record) => record.work?.id === selectedId);
@@ -1072,12 +1410,13 @@ function ReviewContent({
               aria-pressed={status === key}
               className={status === key ? 'active' : ''}
               key={key}
-              onClick={() => setStatus(key)}
+              disabled={!storage.ready}
+              onClick={() => updateFilters({ status: key })}
             >
               {t(workLabels[key])}
               <span className="tab-number">
                 {
-                  scope.records.filter((record) => (record.work?.status || 'missing') === key)
+                  filteredRecords.filter((record) => (record.work?.status || 'missing') === key)
                     .length
                 }
               </span>
@@ -1086,33 +1425,31 @@ function ReviewContent({
         </div>
       </div>
       <div className="teacher-toolbar">
-        <div className="teacher-filters">
-          <Field label={t('Группа')}>
-            <select
-              aria-label={t('Группа работ')}
-              value={groupId}
-              onChange={(event) => {
-                setGroupId(event.target.value);
-                setAssignmentId('');
-              }}
-            >
-              <option value="">{t('Все мои группы')}</option>
-              {scope.groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <fieldset
+          className="teacher-filters"
+          disabled={!storage.ready}
+          style={{ border: 0, padding: 0, minWidth: 0 }}
+        >
+          <TeacherFilterFields
+            scope={scope}
+            filters={filters}
+            update={updateFilters}
+            kinds={scope.assignments.map((assignment) => assignment.type)}
+          />
           <Field label={t('Задание')}>
             <select
               aria-label={t('Задание в очереди')}
               value={assignmentId}
-              onChange={(event) => setAssignmentId(event.target.value)}
+              onChange={(event) => updateFilters({ assignmentId: event.target.value })}
             >
               <option value="">{t('Все задания')}</option>
               {scope.assignments
-                .filter((assignment) => !groupId || assignment.groupId === groupId)
+                .filter(
+                  (assignment) =>
+                    (!groupId || assignment.groupId === groupId) &&
+                    (!filters.subjectId || assignment.subjectId === filters.subjectId) &&
+                    (!filters.type || assignment.type === filters.type),
+                )
                 .map((assignment) => (
                   <option key={assignment.id} value={assignment.id}>
                     {assignment.title}
@@ -1120,7 +1457,7 @@ function ReviewContent({
                 ))}
             </select>
           </Field>
-        </div>
+        </fieldset>
         <div className="search-field">
           <Icon name="search" className="sm" />
           <input
@@ -1128,10 +1465,28 @@ function ReviewContent({
             aria-label={t('Поиск по работам')}
             placeholder={t('Студент или название работы…')}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            disabled={!storage.ready}
+            onChange={(event) => updateFilters({ query: event.target.value })}
           />
         </div>
       </div>
+      <div className="teacher-toolbar">
+        <button
+          type="button"
+          className="button small"
+          disabled={!storage.ready}
+          onClick={() => {
+            setFromLink(false);
+            storage.reset();
+          }}
+        >
+          {teacherUi[locale].reset}
+        </button>
+        <p aria-live="polite">
+          {teacherUi[locale].results}: {rows.length}
+        </p>
+      </div>
+      <StorageFeedback status={storage.status} />
       <div className="card teacher-table-wrap">
         {!rows.length ? (
           <EmptyState
@@ -1387,13 +1742,24 @@ function NewAssignment({
 
 export function AssignmentsPage() {
   const { t, locale } = useI18n();
-  const { data, user } = useStudyHub();
+  const { data, user, now } = useStudyHub();
   const scope = teacherScope(data, user);
-  const [groupId, setGroupId] = useState('');
+  const storage = useTeacherTaskFilters(scope);
+  const { filters } = storage;
   const [creating, setCreating] = useState(false);
   const [info, setInfo] = useState<Assignment | null>(null);
   const assignments = scope.assignments.filter(
-    (assignment) => !groupId || assignment.groupId === groupId,
+    (assignment) =>
+      (!filters.groupId || assignment.groupId === filters.groupId) &&
+      (!filters.subjectId || assignment.subjectId === filters.subjectId) &&
+      (!filters.type || assignment.type === filters.type) &&
+      teacherDeadlineMatches(assignment.dueAt, filters.deadline, now) &&
+      (filters.status === 'all' ||
+        scope.records.some(
+          (record) =>
+            record.assignment.id === assignment.id &&
+            (record.work?.status || 'missing') === filters.status,
+        )),
   );
   return (
     <>
@@ -1412,23 +1778,26 @@ export function AssignmentsPage() {
         }
       />
       <div className="teacher-toolbar">
-        <div className="teacher-filters">
-          <Field label={t('Группа')}>
-            <select
-              aria-label={t('Группа заданий')}
-              value={groupId}
-              onChange={(event) => setGroupId(event.target.value)}
-            >
-              <option value="">{t('Все мои группы')}</option>
-              {scope.groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
+        <fieldset
+          className="teacher-filters"
+          disabled={!storage.ready}
+          style={{ border: 0, padding: 0, minWidth: 0 }}
+        >
+          <TeacherFilterFields
+            scope={scope}
+            filters={filters}
+            update={storage.update}
+            kinds={scope.assignments.map((assignment) => assignment.type)}
+          />
+          <button type="button" className="button small" onClick={storage.reset}>
+            {teacherUi[locale].reset}
+          </button>
+        </fieldset>
+        <p aria-live="polite">
+          {teacherUi[locale].results}: {assignments.length}
+        </p>
       </div>
+      <StorageFeedback status={storage.status} />
       {!assignments.length ? (
         <EmptyState
           title={t('Заданий пока нет')}
@@ -1491,7 +1860,7 @@ export function AssignmentsPage() {
           onClose={() => setCreating(false)}
           onCreated={(id) => {
             setCreating(false);
-            setGroupId(id);
+            storage.update({ ...emptyTeacherFilters, groupId: id });
           }}
         />
       )}

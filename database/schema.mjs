@@ -64,6 +64,8 @@ export const lessonsSchema = `
     attendance_version INTEGER NOT NULL DEFAULT 1,
     practice_id TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT,
     slot_id TEXT CHECK(slot_id IS NULL OR slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9')),
+    academic_year INTEGER CHECK(academic_year BETWEEN 1900 AND 9999),
+    semester INTEGER CHECK(semester IN (1,2)),
     CONSTRAINT school_lessons_activity_check CHECK (
       (kind='srsp' AND practice_id IS NOT NULL AND practice_id<>id
         AND room_id IS NULL AND starts_at IS NULL AND ends_at IS NULL AND slot_id IS NULL)
@@ -173,4 +175,24 @@ export const learningSchema = `
   CREATE INDEX IF NOT EXISTS school_materials_subject ON school_materials(subject_id);
   CREATE INDEX IF NOT EXISTS school_materials_file ON school_materials(file_id);
   CREATE INDEX IF NOT EXISTS school_teaching_groups ON school_teaching_assignments(group_id, subject_id);
+`;
+
+// Installed by the explicit academic migration. Keeping this separate prevents
+// ordinary application startup from applying new constraints to a legacy database.
+export const academicSeedMapSchema = `
+  CREATE TABLE IF NOT EXISTS school_academic_seed_map (
+    entity TEXT NOT NULL, seed_key TEXT NOT NULL, record_id TEXT NOT NULL,
+    PRIMARY KEY(entity,seed_key), UNIQUE(entity,record_id)
+  );
+`;
+
+export const academicSeedSchema = `
+  ${academicSeedMapSchema}
+  CREATE INDEX IF NOT EXISTS school_teacher_subject_lookup ON school_teacher_subjects(subject_id,teacher_id);
+  CREATE INDEX IF NOT EXISTS school_group_curriculum ON school_group_subjects(group_id,academic_year,semester);
+  CREATE INDEX IF NOT EXISTS school_lessons_practice ON school_lessons(practice_id);
+  CREATE INDEX IF NOT EXISTS school_assignments_lesson ON school_assignments(lesson_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS school_group_academic_identity ON school_groups(program,intake_year,language)
+    WHERE program IS NOT NULL AND intake_year IS NOT NULL AND language IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS school_room_number ON school_rooms(number) WHERE number IS NOT NULL;
 `;

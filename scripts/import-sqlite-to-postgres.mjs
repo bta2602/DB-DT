@@ -4,6 +4,11 @@ import { isAbsolute, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
 import { closeDatabase, getDatabase, postgresSchema } from '../database/connection.mjs';
+import { academicSeedMapSchema } from '../database/schema.mjs';
+import {
+  academicMigrationKey,
+  installPostgresAcademicDataObjects,
+} from '../database/migrations/academic-data.mjs';
 
 const markerKey = 'sqlite_import_v1';
 const batchRows = 500;
@@ -29,7 +34,13 @@ const importedTables = [
   'studyhub_settings',
 ];
 const temporaryTables = ['auth_sessions', 'auth_limits'];
-const allTables = [...importedTables, ...temporaryTables];
+// Backend-only databases do not have the explicit academic data extension yet.
+const optionalTables = ['school_academic_seed_map'];
+const allTables = [...importedTables, ...optionalTables, ...temporaryTables];
+
+function snapshotTableNames(tables) {
+  return [...importedTables, ...optionalTables.filter((name) => tables[name])];
+}
 
 class ImportError extends Error {}
 
@@ -73,7 +84,7 @@ function tableHash(rows, columns) {
 function manifest(tables) {
   const counts = {};
   const hashes = {};
-  for (const name of importedTables) {
+  for (const name of snapshotTableNames(tables)) {
     counts[name] = tables[name].rows.length;
     hashes[name] = tableHash(tables[name].rows, tables[name].columns);
   }
@@ -105,12 +116,15 @@ export async function readSqliteSnapshot(filename) {
       .map((row) => row.name);
     if (
       names.some((name) => !allTables.includes(name)) ||
-      allTables.some((name) => !names.includes(name))
+      [...importedTables, ...temporaryTables].some((name) => !names.includes(name))
     ) {
       throw new ImportError('Состав таблиц исходной базы не соответствует текущей схеме StudyHUB.');
     }
     const tables = {};
-    for (const name of importedTables) {
+    for (const name of [
+      ...importedTables,
+      ...optionalTables.filter((name) => names.includes(name)),
+    ]) {
       const columns = source.prepare(`PRAGMA table_info(${identifier(name)})`).all();
       const selected = columns.map((column) => identifier(column.name)).join(',');
       tables[name] = {
@@ -125,6 +139,15 @@ export async function readSqliteSnapshot(filename) {
     }
     if (tables.studyhub_settings.rows.some((row) => row.key === markerKey)) {
       throw new ImportError('В исходной базе уже есть служебный маркер облачного переноса.');
+    }
+    if (
+      tables.studyhub_settings.rows.some((row) => row.key === academicMigrationKey) &&
+      (!tables.school_academic_seed_map ||
+        ['academic_year', 'semester'].some(
+          (name) => !tables.school_lessons.columns.some((column) => column.name === name),
+        ))
+    ) {
+      throw new ImportError('Маркер академической миграции не соответствует исходной схеме.');
     }
     const skipped = Object.fromEntries(
       temporaryTables.map((name) => [
@@ -208,7 +231,7 @@ async function rowCounts(db) {
 
 async function verifyTarget(db, snapshot) {
   const tables = {};
-  for (const name of importedTables) {
+  for (const name of snapshotTableNames(snapshot.tables)) {
     const columns = snapshot.tables[name].columns;
     const selected = columns.map((column) => identifier(column.name)).join(',');
     const filter = name === 'studyhub_settings' ? ' WHERE key<>?' : '';
@@ -226,6 +249,15 @@ async function verifyTarget(db, snapshot) {
   ) {
     throw new ImportError('Число или содержимое целевых записей отличается от исходного снимка.');
   }
+  for (const name of optionalTables.filter((name) => !snapshot.tables[name])) {
+    if (
+      Number((await db.prepare(`SELECT count(*) AS count FROM ${identifier(name)}`).get()).count)
+    ) {
+      throw new ImportError(
+        'В целевой базе появились академические данные, отсутствующие в снимке.',
+      );
+    }
+  }
 }
 
 export async function importSqliteSnapshot(db, snapshot) {
@@ -235,6 +267,7 @@ export async function importSqliteSnapshot(db, snapshot) {
   // CREATE IF NOT EXISTS adds schema objects; it never clears existing records.
   await db.exec(postgresSchema);
   return db.transaction(async (tx) => {
+    await tx.exec(academicSeedMapSchema);
     const marker = await tx
       .prepare('SELECT value FROM studyhub_settings WHERE key=?')
       .get(markerKey);
@@ -256,11 +289,22 @@ export async function importSqliteSnapshot(db, snapshot) {
     if (Object.values(initialCounts).some((count) => count !== 0)) {
       throw new ImportError('Целевая база не пуста; перенос без точного маркера запрещён.');
     }
-    for (const name of importedTables) {
+    // A previously initialized but empty backend schema may predate the data extension.
+    // Add its nullable lesson fields only after verifying that this target is empty.
+    await tx.exec(`
+      ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS academic_year INTEGER CHECK(academic_year BETWEEN 1900 AND 9999);
+      ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS semester INTEGER CHECK(semester IN (1,2));
+    `);
+    for (const name of snapshotTableNames(snapshot.tables)) {
       await insertTable(tx, name, snapshot.tables[name]);
       if (name === 'school_groups') await restoreUserGroups(tx, snapshot.tables.auth_users.rows);
     }
     await verifyTarget(tx, snapshot);
+    // Copy historical rows before enabling write-time rules; a copied migration marker
+    // must never stand in for the views and triggers it describes on the source database.
+    if (snapshot.tables.studyhub_settings.rows.some((row) => row.key === academicMigrationKey)) {
+      await installPostgresAcademicDataObjects({ query: (sql) => tx.exec(sql) });
+    }
     await tx
       .prepare('INSERT INTO studyhub_settings(key,value) VALUES (?,?)')
       .run(markerKey, JSON.stringify(snapshot.manifest));

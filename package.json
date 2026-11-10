@@ -12,7 +12,10 @@
     "demo:setup": "node scripts/setup-demo.mjs",
     "db:import": "node --env-file-if-exists=.env.local scripts/import-sqlite-to-postgres.mjs",
     "db:migrate:academic": "node scripts/migrate-academic.mjs",
-    "test": "node tests/run-api.mjs",
+    "db:academic:migrate": "node scripts/migrate-academic-data.mjs",
+    "db:academic:seed": "node scripts/seed-academic.mjs",
+    "test": "npm run test:academic && node tests/run-api.mjs",
+    "test:academic": "node --test tests/academic-data-migration.test.mjs tests/academic-data.test.mjs tests/academic-cli.test.mjs tests/academic-seed-backend.test.mjs tests/academic-import.test.mjs",
     "test:postgres": "node tests/run-postgres.mjs --qa",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

@@ -406,6 +406,101 @@ dialog::backdrop {
 .publication-dialog-body .drawer-section:first-child {
   margin-top: 0;
 }
+.task-notes-panel {
+  min-width: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.task-notes-panel > p {
+  color: var(--muted);
+}
+.task-notes-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  border: 0;
+}
+.task-notes-fields .field {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-sm);
+}
+.task-notes-panel .task-notes-fields .field textarea {
+  max-width: 100%;
+  border-color: var(--control-border);
+}
+.task-notes-count {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-align: end;
+}
+.task-notes-fields progress {
+  width: 100%;
+  height: 0.75rem;
+  accent-color: var(--green);
+}
+.task-notes-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.task-notes-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--touch-target);
+  padding: var(--space-2);
+  color: var(--ink);
+}
+.task-notes-list li + li {
+  border-top: 1px solid var(--line);
+}
+.task-notes-list input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--green);
+}
+.task-notes-list label:has(input:checked) > span {
+  text-decoration: line-through;
+}
+.task-notes-fields .button {
+  justify-self: start;
+}
+.task-notes-fields .button,
+.button.favorite-button {
+  min-height: var(--touch-target);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.task-notes-fields :is(textarea, input, button):focus-visible,
+.favorite-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.button.favorite-button[aria-pressed='true'] {
+  background: var(--soft);
+  color: var(--green);
+  border-color: var(--green);
+}
+.favorite-button-icon {
+  flex: none;
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+.favorite-button-label {
+  min-width: 0;
+  text-align: start;
+}
+.favorite-button-label small {
+  display: block;
+  font-weight: 400;
+}
 .form-error:empty,
 #login-error:empty {
   display: none;

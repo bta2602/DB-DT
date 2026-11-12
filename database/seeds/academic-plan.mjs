@@ -1,3 +1,5 @@
+import { lessonSlots } from '../../lib/studyhub/lesson-rules.mjs';
+
 export const SUBJECTS = {
   math: 'Прикладная математика',
   stats: 'Теория вероятностей и статистика',
@@ -29,17 +31,11 @@ export function courseForDate(intakeYear, value = new Date()) {
   return academicYearForDate(value) - intakeYear + 1;
 }
 
-export const ACADEMIC_SLOTS = [
-  ['p1', '08:00', '08:50'],
-  ['p2', '08:55', '09:45'],
-  ['p3', '09:50', '10:40'],
-  ['p4', '10:55', '11:45'],
-  ['p5', '11:50', '12:40'],
-  ['p6', '12:45', '13:35'],
-  ['p7', '13:50', '14:40'],
-  ['p8', '14:45', '15:35'],
-  ['p9', '15:40', '16:30'],
-].map(([id, startsAt, endsAt]) => ({ id, startsAt, endsAt }));
+export const ACADEMIC_SLOTS = lessonSlots.map(({ id, start, end }) => ({
+  id,
+  startsAt: start,
+  endsAt: end,
+}));
 
 const BLOCKS = [
   ['math', 'stats'],

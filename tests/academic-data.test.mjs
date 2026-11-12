@@ -27,6 +27,9 @@ const slotStarts = [
   '13:50',
   '14:45',
   '15:40',
+  '16:45',
+  '17:40',
+  '18:35',
 ];
 const protectedTables = [
   'auth_users',

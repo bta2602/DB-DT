@@ -1,0 +1,86 @@
+.campus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+}
+.campus-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  background: var(--white);
+  margin: 18px 0;
+}
+.campus-panel h2,
+.campus-panel h3 {
+  margin-bottom: 14px;
+}
+.campus-panel fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.campus-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.campus-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.campus-check input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--green);
+}
+.campus-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.campus-panel .field {
+  margin-bottom: 12px;
+}
+.campus-panel .form-actions {
+  flex-wrap: wrap;
+}
+.campus-panel .field input,
+.campus-panel .field select {
+  background: var(--white);
+  color: var(--ink);
+}
+.campus-notice {
+  margin: 10px 0;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.campus-toolbar {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.campus-toolbar .field {
+  margin: 0;
+}
+@media (max-width: 850px) {
+  .campus-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .campus-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .campus-panel {
+    padding: 14px;
+  }
+}

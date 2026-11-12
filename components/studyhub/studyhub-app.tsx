@@ -11,6 +11,7 @@ import { DemoRoleControl } from './demo-role-control';
 import { Brand, EmptyState, Icon, Modal } from './shared';
 import { useI18n } from './preferences';
 import { PreferenceControls } from './preference-controls';
+import { campusLabels } from '@/lib/studyhub/campus-labels';
 
 const titles: Record<string, string> = {
   today: 'Сегодня',
@@ -24,6 +25,7 @@ const titles: Record<string, string> = {
   subjects: 'Предметы',
   tasks: 'Задания',
   profile: 'Профиль',
+  academic: 'Учебные настройки',
 };
 const menus: Record<Role, [string, string][]> = {
   admin: [
@@ -31,6 +33,7 @@ const menus: Record<Role, [string, string][]> = {
     ['schedule', 'calendar'],
     ['rooms', 'building'],
     ['people', 'users'],
+    ['academic', 'book'],
   ],
   teacher: [
     ['today', 'home'],
@@ -69,8 +72,8 @@ export function StudyHubApp({
   const page = section || (user?.role === 'admin' ? 'overview' : 'today');
 
   useEffect(() => {
-    document.title = `StudyHUB · ${t(titles[page] || (page === 'register' ? 'Регистрация' : 'Вход'))}`;
-  }, [page, t]);
+    document.title = `StudyHUB · ${page === 'academic' ? campusLabels[locale].academic : t(titles[page] || (page === 'register' ? 'Регистрация' : 'Вход'))}`;
+  }, [page, t, locale]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -193,7 +196,7 @@ export function StudyHubApp({
               onClick={() => setMenu(false)}
             >
               <Icon name={icon} />
-              {t(titles[item])}
+              {item === 'academic' ? campusLabels[locale].academic : t(titles[item])}
               {item === 'review' && waiting > 0 && <span className="nav-count">{waiting}</span>}
             </Link>
           ))}
@@ -237,7 +240,11 @@ export function StudyHubApp({
             <div className="breadcrumb">
               <span>{t('Личный кабинет')}</span>
               <Icon name="chevron" className="sm" />
-              <strong>{t(titles[page] || 'StudyHUB')}</strong>
+              <strong>
+                {page === 'academic'
+                  ? campusLabels[locale].academic
+                  : t(titles[page] || 'StudyHUB')}
+              </strong>
             </div>
           </div>
           <div className="top-actions">

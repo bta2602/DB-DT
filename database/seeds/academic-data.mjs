@@ -26,40 +26,78 @@ const teacherNames = [
   'Ирина Михайловна Белова',
   'Руслан Даниярович Абдрахманов',
 ];
-const firstNames = [
+const kazakhFirstNames = [
   ['Айдана', 'Тимур'],
   ['Аружан', 'Данияр'],
-  ['Алина', 'Ерасыл'],
+  ['Әлия', 'Ерасыл'],
   ['Амина', 'Арман'],
-  ['София', 'Руслан'],
-  ['Мадина', 'Нурислам'],
-  ['Дарина', 'Адиль'],
+  ['Салтанат', 'Руслан'],
+  ['Мадина', 'Нұрислам'],
+  ['Дана', 'Әділ'],
   ['Аяжан', 'Дамир'],
   ['Меруерт', 'Бекзат'],
-  ['Диана', 'Нурбек'],
-  ['Камиля', 'Алишер'],
-  ['Раяна', 'Ильяс'],
+  ['Динара', 'Нұрбек'],
+  ['Кәмила', 'Әлішер'],
+  ['Раяна', 'Ілияс'],
   ['Томирис', 'Азамат'],
-  ['Аделя', 'Султан'],
-  ['Вероника', 'Никита'],
-  ['Анастасия', 'Максим'],
-  ['Милана', 'Роман'],
-  ['Алиса', 'Дмитрий'],
+  ['Әсел', 'Сұлтан'],
+  ['Ақбота', 'Нұрсұлтан'],
+  ['Айгерім', 'Мұрат'],
+  ['Жансая', 'Әлихан'],
+  ['Назерке', 'Еркебұлан'],
 ];
-const families = [
-  ['Ахметова', 'Ахметов', 'Сериковна', 'Серикович'],
-  ['Омарова', 'Омаров', 'Ерлановна', 'Ерланович'],
-  ['Касымова', 'Касымов', 'Муратовна', 'Муратович'],
-  ['Есенова', 'Есенов', 'Талгатовна', 'Талгатович'],
-  ['Абилова', 'Абилов', 'Канатовна', 'Канатович'],
-  ['Исаева', 'Исаев', 'Армановна', 'Арманович'],
-  ['Нуралиева', 'Нуралиев', 'Болатовна', 'Болатович'],
-  ['Садыкова', 'Садыков', 'Асхатовна', 'Асхатович'],
-  ['Толеубаева', 'Толеубаев', 'Нурлановна', 'Нурланович'],
-  ['Кайратова', 'Кайратов', 'Данияровна', 'Даниярович'],
+const kazakhFamilies = [
+  ['Ахметова', 'Ахметов', 'Серікқызы', 'Серікұлы'],
+  ['Омарова', 'Омаров', 'Ерланқызы', 'Ерланұлы'],
+  ['Қасымова', 'Қасымов', 'Мұратқызы', 'Мұратұлы'],
+  ['Есенова', 'Есенов', 'Талғатқызы', 'Талғатұлы'],
+  ['Әбілова', 'Әбілов', 'Қанатқызы', 'Қанатұлы'],
+  ['Исаева', 'Исаев', 'Арманқызы', 'Арманұлы'],
+  ['Нұралиева', 'Нұралиев', 'Болатқызы', 'Болатұлы'],
+  ['Садықова', 'Садықов', 'Асхатқызы', 'Асхатұлы'],
+  ['Төлеубаева', 'Төлеубаев', 'Нұрланқызы', 'Нұрланұлы'],
+  ['Қайратова', 'Қайратов', 'Даниярқызы', 'Даниярұлы'],
 ];
 
-function studentName(index) {
+const russianFirstNames = [
+  ['Алина', 'Александр'],
+  ['Анна', 'Дмитрий'],
+  ['Мария', 'Максим'],
+  ['София', 'Артём'],
+  ['Полина', 'Никита'],
+  ['Дарья', 'Иван'],
+  ['Екатерина', 'Михаил'],
+  ['Анастасия', 'Андрей'],
+  ['Виктория', 'Кирилл'],
+  ['Елизавета', 'Даниил'],
+  ['Александра', 'Роман'],
+  ['Вероника', 'Илья'],
+  ['Валерия', 'Егор'],
+  ['Ксения', 'Матвей'],
+  ['Алиса', 'Владислав'],
+  ['Милана', 'Тимофей'],
+  ['Ульяна', 'Павел'],
+  ['Диана', 'Денис'],
+];
+const russianFamilies = [
+  ['Иванова', 'Иванов', 'Сергеевна', 'Сергеевич'],
+  ['Петрова', 'Петров', 'Андреевна', 'Андреевич'],
+  ['Соколова', 'Соколов', 'Александровна', 'Александрович'],
+  ['Смирнова', 'Смирнов', 'Дмитриевна', 'Дмитриевич'],
+  ['Кузнецова', 'Кузнецов', 'Викторовна', 'Викторович'],
+  ['Попова', 'Попов', 'Алексеевна', 'Алексеевич'],
+  ['Волкова', 'Волков', 'Михайловна', 'Михайлович'],
+  ['Морозова', 'Морозов', 'Николаевна', 'Николаевич'],
+  ['Орлова', 'Орлов', 'Павловна', 'Павлович'],
+  ['Фёдорова', 'Фёдоров', 'Игоревна', 'Игоревич'],
+];
+
+// Only new fictional accounts receive these names; existing names are never rewritten.
+export function academicStudentName(index, language) {
+  if (!Number.isInteger(index) || index < 0 || !['kk', 'ru'].includes(language))
+    throw new RangeError('Укажите номер студента и язык группы kk или ru.');
+  const firstNames = language === 'kk' ? kazakhFirstNames : russianFirstNames;
+  const families = language === 'kk' ? kazakhFamilies : russianFamilies;
   const sex = index % 2;
   const first = firstNames[Math.floor(index / 2) % firstNames.length][sex];
   const family = families[Math.floor(index / (firstNames.length * 2)) % families.length];
@@ -80,25 +118,29 @@ function firstMonday(year) {
   return date.toISOString().slice(0, 10);
 }
 
-function datesForTerm(academicYear, startDate) {
+export function datesForTerm(academicYear, startDate) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error('startDate: ожидается YYYY-MM-DD.');
   const start = Date.parse(`${startDate}T00:00:00Z`);
   const date = new Date(start);
   if (
     !Number.isFinite(start) ||
     date.toISOString().slice(0, 10) !== startDate ||
-    date.getUTCDay() !== 1
+    date.getUTCDay() === 0 ||
+    date.getUTCDay() === 6
   )
-    throw new Error('Начало расписания должно быть понедельником.');
-  const finalDate = new Date(start + 25 * DAY).toISOString().slice(0, 10);
+    throw new Error('Начало расписания должно быть существующим будним днём.');
+  const days = [];
+  // A rollout may start midweek; keep twenty teaching days and skip every weekend.
+  for (let offset = 0; days.length < 20; offset++) {
+    const current = new Date(start + offset * DAY);
+    if (current.getUTCDay() !== 0 && current.getUTCDay() !== 6)
+      days.push(current.toISOString().slice(0, 10));
+  }
+  const finalDate = days.at(-1);
   // The shared backend contract treats January as semester 2.
   if (startDate < `${academicYear}-09-01` || finalDate > `${academicYear}-12-31`)
     throw new Error('Четыре недели должны находиться в первом семестре.');
-  return Array.from({ length: 4 }, (_, week) =>
-    Array.from({ length: 5 }, (_, day) =>
-      new Date(start + (week * 7 + day) * DAY).toISOString().slice(0, 10),
-    ),
-  );
+  return Array.from({ length: 4 }, (_, week) => days.slice(week * 5, week * 5 + 5));
 }
 
 function requiredRoomTypes(subjectCode, kind) {
@@ -417,7 +459,12 @@ export async function seedAcademicData(
           // Do not redistribute students: existing group-based access must remain intact.
           row = current.find((candidate) => !used.has(`student:${candidate.id}`));
           if (!row && current.length < 20) {
-            row = await createAccount('student', key, studentName(studentIndex), group.id);
+            row = await createAccount(
+              'student',
+              key,
+              academicStudentName(studentIndex, group.language),
+              group.id,
+            );
             current.push(row);
           }
           if (row) await remember('student', key, row);

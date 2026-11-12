@@ -4,6 +4,7 @@ import { resolve, relative, isAbsolute, sep } from 'node:path';
 import { authSchema, schoolSchema, learningSchema } from './schema.mjs';
 import { migrateSqliteGrading } from './migrations/grading-100.mjs';
 import { migrateSqliteAcademic as migrateSqliteAcademicRules } from './migrations/academic-rules.mjs';
+import { migrateSqliteEveningSlots } from './migrations/evening-slots.mjs';
 
 // Deliberate entry points for maintenance commands; neither runs on connection.
 export { migrateSqliteAcademic, migratePostgresAcademic } from './migrations/academic-data.mjs';
@@ -201,6 +202,7 @@ async function connect(key) {
   sqlite.exec(learningSchema);
   migrateSqliteGrading(sqlite);
   migrateSqliteAcademicRules(sqlite);
+  migrateSqliteEveningSlots(sqlite);
   chmodSync(filename, 0o600);
   const queue = serialQueue();
   const query = (sql, args) => {

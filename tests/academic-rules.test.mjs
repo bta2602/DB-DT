@@ -13,14 +13,18 @@ import {
 } from '../lib/studyhub/lesson-rules.mjs';
 
 test('Fixed pairs, calendar validation and interval boundaries', () => {
-  assert.equal(lessonSlots.length, 9);
+  assert.equal(lessonSlots.length, 12);
   assert.equal(lessonInterval('2026-11-10', 'p1').startsAt, '2026-11-10T03:00:00.000Z');
   assert.equal(lessonSlots[3].start, '10:55');
   assert.equal(lessonSlots[6].start, '13:50');
   assert.equal(validateLessonDate('2028-02-29'), '2028-02-29');
   for (const date of ['2026-02-29', '2026-02-31', '2026-13-01', '2026-2-01', null])
     assert.throws(() => validateLessonDate(date));
-  assert.throws(() => lessonInterval('2026-11-10', 'p10'));
+  assert.equal(lessonSlots[9].start, '16:45');
+  assert.equal(lessonInterval('2026-11-10', 'p10').startsAt, '2026-11-10T11:45:00.000Z');
+  assert.equal(lessonInterval('2026-11-10', 'p11').startsAt, '2026-11-10T12:40:00.000Z');
+  assert.equal(lessonInterval('2026-11-10', 'p12').endsAt, '2026-11-10T14:25:00.000Z');
+  assert.throws(() => lessonInterval('2026-11-10', 'p13'));
   assert.deepEqual(lessonPeriod('2026-08-31'), { academicYear: 2025, semester: 2 });
   assert.deepEqual(lessonPeriod('2026-09-01'), { academicYear: 2026, semester: 1 });
   assert.deepEqual(lessonPeriod('2027-01-01'), { academicYear: 2026, semester: 2 });
@@ -150,7 +154,7 @@ test('Academic rules protect real storage and retain historical records', async 
       await assert.rejects(() => saveLesson(admin, { ...ordinary, subjectId: 's2' }), {
         code: 'SUBJECT_NOT_IN_CURRICULUM',
       });
-      await assert.rejects(() => saveLesson(admin, { ...ordinary, slotId: 'p10' }), {
+      await assert.rejects(() => saveLesson(admin, { ...ordinary, slotId: 'p13' }), {
         code: 'INVALID_INTERVAL',
       });
       await assert.rejects(

@@ -1,4 +1,5 @@
 import { academicRelationsSchema, academicSeedSchema, lessonsSchema } from '../schema.mjs';
+import { lessonSlots } from '../../lib/studyhub/lesson-rules.mjs';
 
 export const academicMigrationKey = 'academic_data_v1';
 
@@ -15,14 +16,15 @@ const columns = {
   },
   school_lessons: {
     practice_id: 'TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT',
-    slot_id: "TEXT CHECK(slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9'))",
+    slot_id:
+      "TEXT CHECK(slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12'))",
     academic_year: 'INTEGER CHECK(academic_year BETWEEN 1900 AND 9999)',
     semester: 'INTEGER CHECK(semester IN (1,2))',
   },
   school_assignments: { lesson_id: 'TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT' },
 };
 
-const slots = ['08:00', '08:55', '09:50', '10:55', '11:50', '12:45', '13:50', '14:45', '15:40'];
+const slots = lessonSlots.map((slot) => slot.start);
 const slotTime = `CASE NEW.slot_id ${slots.map((time, i) => `WHEN 'p${i + 1}' THEN '${time}:00.000'`).join(' ')} END`;
 const identity = ['group_id', 'subject_id', 'teacher_id'];
 const scheduleFields = [
@@ -261,8 +263,9 @@ function triggerDefinitions(dialect) {
   return rules;
 }
 
-function sqliteTriggers() {
+function sqliteTriggers(names) {
   return triggerDefinitions('sqlite')
+    .filter((rule) => !names || names.includes(rule.name))
     .map(
       ({ name, table, event, checks, when }) => `
     CREATE TRIGGER ${name} BEFORE ${event} ON ${table}${when ? ` WHEN ${when}` : ''} BEGIN
@@ -273,8 +276,9 @@ function sqliteTriggers() {
     .join('\n');
 }
 
-function postgresTriggers() {
+function postgresTriggers(names) {
   return triggerDefinitions('postgres')
+    .filter((rule) => !names || names.includes(rule.name))
     .map(
       ({ name, table, event, checks, when }) => `
     CREATE OR REPLACE FUNCTION ${name}_fn() RETURNS trigger LANGUAGE plpgsql AS $body$
@@ -304,6 +308,18 @@ function views(dialect) {
         CASE WHEN intake_year IS NULL THEN course ELSE ${academicYear(now)} - intake_year + 1 END AS course
       FROM school_groups;
   `;
+}
+
+// Used by the later slot-grid migration inside its transaction. Other triggers stay intact.
+const lessonTriggerNames = ['academic_lesson_insert', 'academic_lesson_update'];
+export function refreshSqliteLessonTriggers(db) {
+  for (const name of lessonTriggerNames) db.exec(`DROP TRIGGER IF EXISTS ${name}`);
+  db.exec(sqliteTriggers(lessonTriggerNames));
+}
+export async function refreshPostgresLessonTriggers(client) {
+  for (const name of lessonTriggerNames)
+    await client.query(`DROP TRIGGER IF EXISTS ${name} ON school_lessons`);
+  await client.query(postgresTriggers(lessonTriggerNames));
 }
 
 function sqliteHasMarker(db) {

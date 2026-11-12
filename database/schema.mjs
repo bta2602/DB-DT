@@ -63,7 +63,7 @@ export const lessonsSchema = `
     note TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
     attendance_version INTEGER NOT NULL DEFAULT 1,
     practice_id TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT,
-    slot_id TEXT CHECK(slot_id IS NULL OR slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9')),
+    slot_id TEXT CHECK(slot_id IS NULL OR slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12')),
     academic_year INTEGER CHECK(academic_year BETWEEN 1900 AND 9999),
     semester INTEGER CHECK(semester IN (1,2)),
     CONSTRAINT school_lessons_activity_check CHECK (

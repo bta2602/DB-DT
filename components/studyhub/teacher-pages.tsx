@@ -26,7 +26,9 @@ import {
   lessonKindLabel,
 } from '@/lib/studyhub/client-utils';
 import { downloadCsv } from '@/lib/studyhub/journal-csv';
-import { normalizeLessonKind } from '@/lib/studyhub/lesson-rules.mjs';
+import { formLessonKind, subjectsForDate, teachersForSubject } from '@/lib/studyhub/lesson-form';
+import { lessonFormLabels } from '@/lib/studyhub/lesson-form-labels';
+import { LessonTypeButtons } from './lesson-editor';
 import { deadlineFilters, deadlineLabels, type DeadlineFilter } from '@/lib/studyhub/deadlines';
 import {
   academicTypeLabel,
@@ -1604,6 +1606,8 @@ function NewAssignment({
   const { t, locale } = useI18n();
   const { data, user, mutate, notify, now } = useStudyHub();
   const scope = teacherScope(data, user);
+  const labels = lessonFormLabels[locale];
+  const [kind, setKind] = useState<'lecture' | 'practice' | 'srsp'>('lecture');
   const [groupId, setGroupId] = useState(scope.groups[0]?.id || '');
   const [selectedSubject, setSelectedSubject] = useState('');
   const subjects = scope.subjects(groupId);
@@ -1613,12 +1617,21 @@ function NewAssignment({
   const [selectedLesson, setSelectedLesson] = useState('');
   const lessons = scope.lessons.filter((lesson) => {
     if (lesson.groupId !== groupId || lesson.subjectId !== subjectId) return false;
-    try {
-      normalizeLessonKind(lesson.kind);
-      return true;
-    } catch {
+    if (lesson.status !== 'scheduled' || formLessonKind(lesson.kind) !== kind) return false;
+    if (
+      kind === 'srsp' &&
+      !data.lessons.some(
+        (practice) =>
+          practice.id === lesson.practiceId &&
+          practice.status === 'scheduled' &&
+          formLessonKind(practice.kind) === 'practice',
+      )
+    )
       return false;
-    }
+    return (
+      subjectsForDate(data, groupId, lesson.date).some((subject) => subject.id === subjectId) &&
+      teachersForSubject(data, groupId, subjectId).some((teacher) => teacher.id === user?.id)
+    );
   });
   const linkedLesson = lessons.find((lesson) => lesson.id === selectedLesson) || lessons[0];
   const [busy, setBusy] = useState(false);
@@ -1699,6 +1712,7 @@ function NewAssignment({
               onChange={(event) => {
                 setGroupId(event.target.value);
                 setSelectedSubject('');
+                setSelectedLesson('');
               }}
             >
               {scope.groups.map((group) => (
@@ -1713,7 +1727,10 @@ function NewAssignment({
               name="subjectId"
               value={subjectId}
               disabled={busy}
-              onChange={(event) => setSelectedSubject(event.target.value)}
+              onChange={(event) => {
+                setSelectedSubject(event.target.value);
+                setSelectedLesson('');
+              }}
             >
               {subjects.map((subject) => (
                 <option key={subject.id} value={subject.id}>
@@ -1727,10 +1744,17 @@ function NewAssignment({
           <Field label={t('Срок сдачи (UTC+5)')}>
             <input type="datetime-local" name="dueAt" required disabled={busy} />
           </Field>
-          <Field label={t('Тип')}>
-            <input readOnly value={linkedLesson ? t(lessonKindLabel(linkedLesson.kind)) : '—'} />
-          </Field>
         </div>
+        <LessonTypeButtons
+          value={kind}
+          onChange={(next) => {
+            setKind(next);
+            setSelectedLesson('');
+          }}
+          label={labels.assignmentType}
+          disabled={busy}
+        />
+        <p className="small muted">{labels.assignmentHint}</p>
         <Field label={t('Занятие')}>
           <select
             name="lessonId"
@@ -1748,11 +1772,7 @@ function NewAssignment({
             ))}
           </select>
         </Field>
-        {!lessons.length && (
-          <p className="small muted">
-            {t('Для задания нужно опубликованное занятие по выбранному предмету.')}
-          </p>
-        )}
+        {!lessons.length && <p className="small muted">{labels.noLessons}</p>}
         {linkedLesson?.kind === 'srsp' && (
           <p className="small muted">
             {t(

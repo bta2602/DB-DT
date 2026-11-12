@@ -165,7 +165,7 @@ export async function migratePostgresAcademic(client) {
         OR (kind<>'srsp' AND practice_id IS NULL AND room_id IS NOT NULL
           AND starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at>starts_at)`,
       school_lessons_slot_id_check:
-        "slot_id IS NULL OR slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9')",
+        "slot_id IS NULL OR slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12')",
     };
     for (const [name, condition] of Object.entries(checks)) {
       const exists = await client.query(

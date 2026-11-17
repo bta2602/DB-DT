@@ -23,6 +23,7 @@ import './styles/publication.css';
 import './globals.css';
 import './styles/preferences.css';
 import './styles/dark.css';
+import './styles/table-tools.css';
 
 export async function generateMetadata() {
   return pageMetadata('Учебное пространство');

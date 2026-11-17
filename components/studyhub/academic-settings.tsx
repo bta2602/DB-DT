@@ -1,5 +1,8 @@
 'use client';
 
+import { SearchSelect } from './search-select';
+import { lessonToolsLabels } from '@/lib/studyhub/lesson-tools-labels';
+
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type { Group } from '@/lib/studyhub/api-contract';
 import { campusDate, lessonPeriod } from '@/lib/studyhub/lesson-rules.mjs';
@@ -48,14 +51,6 @@ function SaveButton({
   );
 }
 
-function Options({ items }: { items: { id: string; name: string }[] }) {
-  return items.map((item) => (
-    <option key={item.id} value={item.id}>
-      {item.name}
-    </option>
-  ));
-}
-
 function SubjectChecks({
   selected,
   change,
@@ -66,26 +61,44 @@ function SubjectChecks({
   limit?: number;
 }) {
   const { data } = useStudyHub();
+  const { locale } = useI18n();
+  const labels = lessonToolsLabels[locale];
+  const [query, setQuery] = useState('');
+  const visible = data.subjects.filter(
+    (subject) =>
+      selected.includes(subject.id) ||
+      subject.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
+  );
   return (
-    <div className="campus-checks">
-      {data.subjects.map((subject) => (
-        <label key={subject.id} className="campus-check">
-          <input
-            type="checkbox"
-            checked={selected.includes(subject.id)}
-            disabled={limit != null && selected.length >= limit && !selected.includes(subject.id)}
-            onChange={(event) =>
-              change(
-                event.target.checked
-                  ? [...selected, subject.id]
-                  : selected.filter((id) => id !== subject.id),
-              )
-            }
-          />
-          <span>{subject.name}</span>
-        </label>
-      ))}
-    </div>
+    <>
+      <Field label={`${labels.search}: ${campusLabels[locale].subject}`}>
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+      </Field>
+      {!visible.length && (
+        <p className="muted" role="status">
+          {labels.nothing}
+        </p>
+      )}
+      <div className="campus-checks">
+        {visible.map((subject) => (
+          <label key={subject.id} className="campus-check">
+            <input
+              type="checkbox"
+              checked={selected.includes(subject.id)}
+              disabled={limit != null && selected.length >= limit && !selected.includes(subject.id)}
+              onChange={(event) =>
+                change(
+                  event.target.checked
+                    ? [...selected, subject.id]
+                    : selected.filter((id) => id !== subject.id),
+                )
+              }
+            />
+            <span>{subject.name}</span>
+          </label>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -389,20 +402,18 @@ function Assignments() {
       >
         <fieldset disabled={busy}>
           <div className="campus-grid">
-            <Field label={labels.group}>
-              <select
-                required
-                value={groupId}
-                onChange={(event) => {
-                  setGroupId(event.target.value);
-                  setSubjectId('');
-                  setTeacherId('');
-                }}
-              >
-                <option value="">{labels.select}</option>
-                <Options items={data.groups} />
-              </select>
-            </Field>
+            <SearchSelect
+              label={labels.group}
+              options={data.groups}
+              value={groupId}
+              required
+              placeholder={labels.select}
+              onChange={(value) => {
+                setGroupId(value);
+                setSubjectId('');
+                setTeacherId('');
+              }}
+            />
             <Field label={labels.date}>
               <input
                 required
@@ -415,31 +426,27 @@ function Assignments() {
                 }}
               />
             </Field>
-            <Field label={labels.subject}>
-              <select
-                required
-                value={subject}
-                disabled={!groupId || !options.subjects.length}
-                onChange={(event) => {
-                  setSubjectId(event.target.value);
-                  setTeacherId('');
-                }}
-              >
-                <option value="">{labels.select}</option>
-                <Options items={options.subjects} />
-              </select>
-            </Field>
-            <Field label={labels.teacher}>
-              <select
-                required
-                value={teacher}
-                disabled={!subject || !language || !options.teachers.length}
-                onChange={(event) => setTeacherId(event.target.value)}
-              >
-                <option value="">{labels.select}</option>
-                <Options items={options.teachers} />
-              </select>
-            </Field>
+            <SearchSelect
+              label={labels.subject}
+              options={options.subjects}
+              value={subject}
+              required
+              placeholder={labels.select}
+              disabled={!groupId || !options.subjects.length}
+              onChange={(value) => {
+                setSubjectId(value);
+                setTeacherId('');
+              }}
+            />
+            <SearchSelect
+              label={labels.teacher}
+              options={options.teachers}
+              value={teacher}
+              required
+              placeholder={labels.select}
+              disabled={!subject || !language || !options.teachers.length}
+              onChange={setTeacherId}
+            />
           </div>
           {groupId && !language && <p className="campus-notice">{labels.selectGroupLanguage}</p>}
           {groupId && !options.subjects.length && (
@@ -540,11 +547,14 @@ export function AcademicSettings() {
       {tab === 'teachers' &&
         (teacher ? (
           <>
-            <Field label={labels.teacher}>
-              <select value={teacher} onChange={(event) => setTeacherId(event.target.value)}>
-                <Options items={teachers} />
-              </select>
-            </Field>
+            <SearchSelect
+              label={labels.teacher}
+              options={teachers}
+              value={teacher}
+              onChange={setTeacherId}
+              placeholder={labels.select}
+              required
+            />
             <TeacherProfile
               key={`${user.id}:${teacher}:subjects:${teacherSubjectsKey}`}
               teacherId={teacher}
@@ -562,11 +572,14 @@ export function AcademicSettings() {
       {tab === 'groups' &&
         (group ? (
           <>
-            <Field label={labels.group}>
-              <select value={group.id} onChange={(event) => setGroupId(event.target.value)}>
-                <Options items={data.groups} />
-              </select>
-            </Field>
+            <SearchSelect
+              label={labels.group}
+              options={data.groups}
+              value={group.id}
+              onChange={setGroupId}
+              placeholder={labels.select}
+              required
+            />
             <GroupSettings key={`${user.id}:${group.id}`} group={group} />
           </>
         ) : (

@@ -19,6 +19,7 @@ export function SearchSelect({
   required = false,
   children,
   name,
+  resetKey = 0,
 }: {
   label: string;
   options: SearchOption[];
@@ -30,11 +31,14 @@ export function SearchSelect({
   required?: boolean;
   children?: ReactNode;
   name?: string;
+  resetKey?: number;
 }) {
   const id = useId();
   const { locale } = useI18n();
   const labels = lessonToolsLabels[locale];
-  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState({ key: resetKey, query: '' });
+  const query = search.key === resetKey ? search.query : '';
+  const setQuery = (query: string) => setSearch({ key: resetKey, query });
   const normalized = query.trim().toLocaleLowerCase(locale);
   const matches = options.filter((option) =>
     `${option.name} ${option.search || ''}`.toLocaleLowerCase(locale).includes(normalized),
@@ -56,6 +60,9 @@ export function SearchSelect({
           aria-label={`${labels.search}: ${label}`}
           placeholder={`${labels.search}: ${label.toLocaleLowerCase(locale)}`}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.preventDefault();
+          }}
         />
         {query && (
           <button

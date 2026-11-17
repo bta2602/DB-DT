@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { SortHeading } from './sort-heading';
+import { sortRows, nextSort, type SortState } from '@/lib/studyhub/table-sort';
 import type { Room, RoomType } from '@/lib/studyhub/api-contract';
 import { formatTime, lessonStatus } from '@/lib/studyhub/client-utils';
 import { campusLabels } from '@/lib/studyhub/campus-labels';
@@ -127,6 +129,7 @@ export function RoomsPage() {
   const labels = campusLabels[locale];
   const { data, user, now, ready, error } = useStudyHub();
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
+  const [sort, setSort] = useState<SortState>({ key: '0', direction: 'asc' });
   const storage = useBrowserStorage({
     userId: user?.id,
     area: 'room-filters',
@@ -137,13 +140,26 @@ export function RoomsPage() {
   const filters = normalizeRoomFilters(storage.value, data.rooms, availabilityKnown);
   const occupied = new Map(
     data.lessons
-      .filter((lesson) => lesson.roomId && lessonStatus(lesson, now) === 'current')
+      .filter(
+        (lesson) => !lesson.archivedAt && lesson.roomId && lessonStatus(lesson, now) === 'current',
+      )
       .map((lesson) => [lesson.roomId, lesson]),
   );
   const floors = [
     ...new Set(data.rooms.flatMap((room) => (room.floor == null ? [] : [room.floor]))),
   ].sort((a, b) => a - b);
-  const rooms = data.rooms.filter((room) => matchesRoom(room, filters, occupied.has(room.id)));
+  const rooms = sortRows(
+    data.rooms.filter((room) => matchesRoom(room, filters, occupied.has(room.id))),
+    sort,
+    (room, key) => {
+      if (key === '1') return room.floor;
+      if (key === '2') return room.type ? labels.roomsType[room.type] : null;
+      if (key === '3') return room.capacity;
+      if (key === '4') return availabilityKnown ? Number(occupied.has(room.id)) : null;
+      return room.number || room.name;
+    },
+    locale,
+  );
   const change = (key: keyof typeof filters, value: string) =>
     storage.setValue({ ...filters, [key]: value });
   return (
@@ -239,11 +255,21 @@ export function RoomsPage() {
                   labels.capacity,
                   labels.now,
                   ...(user?.role === 'admin' ? [labels.action] : []),
-                ].map((title) => (
-                  <th key={title} scope="col">
-                    {title}
-                  </th>
-                ))}
+                ].map((title, index) =>
+                  index === 5 ? (
+                    <th key={title} scope="col">
+                      {title}
+                    </th>
+                  ) : (
+                    <SortHeading
+                      key={title}
+                      label={title}
+                      column={String(index)}
+                      sort={sort}
+                      onSort={(key) => setSort(nextSort(sort, key))}
+                    />
+                  ),
+                )}
               </tr>
             </thead>
             <tbody>

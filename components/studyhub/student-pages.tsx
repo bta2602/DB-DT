@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { SearchSelect } from './search-select';
+import { SortHeading } from './sort-heading';
+import { sortRows, nextSort, type SortState } from '@/lib/studyhub/table-sort';
 import { useState, type FormEvent } from 'react';
 import type { Assignment, Bootstrap, Submission, User } from '@/lib/studyhub/api-contract';
 import { allowedSubmissionExtensions, maxSubmissionBytes } from '@/lib/studyhub/api-contract';
@@ -19,6 +22,7 @@ import {
   gradeLabel,
   numericGrade,
   lessonStatus,
+  lessonSchedule,
   lessonDay,
   lessonSortKey,
   lessonKindLabel,
@@ -249,6 +253,7 @@ export function StudentToday() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const today = dateKey(new Date(now));
   const lessons = data.lessons
+    .filter((lesson) => !lesson.archivedAt)
     .filter(
       (lesson) =>
         lesson.groupId === user?.groupId &&
@@ -308,12 +313,14 @@ export function StudentToday() {
             {lessons.length ? (
               <div className="schedule-list">
                 {lessons.map((lesson) => {
+                  const schedule = lessonSchedule(lesson, data.lessons);
                   const status = lessonStatus(lesson, now);
                   return (
                     <div key={lesson.id} className="publication-lesson">
                       <div className="lesson-time">
-                        {lesson.kind === 'srsp' ? t('СРСП') : formatTime(lesson.startsAt)}
-                        {lesson.endsAt && <small>{formatTime(lesson.endsAt)}</small>}
+                        {lesson.kind === 'srsp' ? t('СРСП') : formatTime(schedule.startsAt)}
+                        {lesson.kind === 'srsp' && <small>{formatTime(schedule.startsAt)}</small>}
+                        {schedule.endsAt && <small>{formatTime(schedule.endsAt)}</small>}
                       </div>
                       <span className="subject-icon">
                         <Icon name="book" />
@@ -328,10 +335,10 @@ export function StudentToday() {
                         </p>
                         <small>
                           {data.groups.find((item) => item.id === lesson.groupId)?.name}{' '}
-                          {lesson.roomId && (
+                          {schedule.roomId && (
                             <>
                               {t('· Ауд.')}{' '}
-                              {data.rooms.find((item) => item.id === lesson.roomId)?.name}
+                              {data.rooms.find((item) => item.id === schedule.roomId)?.name}
                             </>
                           )}
                         </small>
@@ -380,6 +387,7 @@ export function StudentToday() {
 export function TasksPage() {
   const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const stored = useBrowserStorage({
     userId: user?.id,
     area: 'filters',
@@ -434,20 +442,15 @@ export function TasksPage() {
         {deadlineText.count}: {overdueCount}
       </p>
       <div className="publication-toolbar">
-        <Field label={labels.subject}>
-          <select
-            value={subjectId}
-            disabled={!stored.ready}
-            onChange={(event) => changeFilters({ subjectId: event.target.value })}
-          >
-            <option value="">{labels.allSubjects}</option>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>
-                {subject.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <SearchSelect
+          label={labels.subject}
+          options={subjects}
+          placeholder={labels.allSubjects}
+          value={subjectId}
+          resetKey={filterResetKey}
+          disabled={!stored.ready}
+          onChange={(value) => changeFilters({ subjectId: value })}
+        />
         <Field label={labels.type}>
           <select
             value={type}
@@ -503,7 +506,10 @@ export function TasksPage() {
           className="button"
           type="button"
           disabled={!stored.ready}
-          onClick={() => stored.reset()}
+          onClick={() => {
+            stored.reset();
+            setFilterResetKey((key) => key + 1);
+          }}
         >
           {labels.reset}
         </button>
@@ -542,6 +548,7 @@ function subjectGrades(data: Bootstrap, studentId: string | undefined, subjectId
       ? [
           {
             id: `lesson-${lesson.id}`,
+            source: 'lesson' as const,
             title: lessonKindLabel(lesson.kind),
             date: lesson.startsAt || lesson.date,
             grade: numericGrade(grade),
@@ -562,6 +569,7 @@ function subjectGrades(data: Bootstrap, studentId: string | undefined, subjectId
       ? [
           {
             id: `work-${submission.id}`,
+            source: 'work' as const,
             title: assignment.title,
             date: submission.submittedAt,
             grade: submission.grade,
@@ -579,6 +587,7 @@ export function SubjectsPage() {
   const { data, user, downloadFile, notify } = useStudyHub();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'grades' | 'materials'>('grades');
+  const [sort, setSort] = useState<SortState>({ key: 'date', direction: 'desc' });
   const subject = data.subjects.find((item) => item.id === selectedId);
   if (!subject)
     return (
@@ -622,7 +631,19 @@ export function SubjectsPage() {
         )}
       </>
     );
-  const grades = subjectGrades(data, user?.id, subject.id);
+  const grades = sortRows(
+    subjectGrades(data, user?.id, subject.id).map((row) => ({
+      ...row,
+      title: row.source === 'lesson' ? t(row.title) : row.title,
+    })),
+    sort,
+    (row, key) => {
+      if (key === 'date') return Date.parse(row.date);
+      if (key === 'grade') return row.grade;
+      return key === 'comment' ? row.comment : row.title;
+    },
+    locale,
+  );
   const materials = data.materials.filter((item) => item.subjectId === subject.id);
   return (
     <>
@@ -655,10 +676,30 @@ export function SubjectsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>{t('Дата')}</th>
-                  <th>{t('Работа / занятие')}</th>
-                  <th>{t('Оценка')}</th>
-                  <th>{t('Комментарий')}</th>
+                  <SortHeading
+                    label={t('Дата')}
+                    column="date"
+                    sort={sort}
+                    onSort={(key) => setSort(nextSort(sort, key))}
+                  />
+                  <SortHeading
+                    label={t('Работа / занятие')}
+                    column="title"
+                    sort={sort}
+                    onSort={(key) => setSort(nextSort(sort, key))}
+                  />
+                  <SortHeading
+                    label={t('Оценка')}
+                    column="grade"
+                    sort={sort}
+                    onSort={(key) => setSort(nextSort(sort, key))}
+                  />
+                  <SortHeading
+                    label={t('Комментарий')}
+                    column="comment"
+                    sort={sort}
+                    onSort={(key) => setSort(nextSort(sort, key))}
+                  />
                 </tr>
               </thead>
               <tbody>

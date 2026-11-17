@@ -1,0 +1,66 @@
+.sort-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.sort-heading span {
+  flex-shrink: 0;
+}
+.sort-heading:hover {
+  color: var(--green);
+}
+.sort-heading:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
+}
+
+/* The rounded shell clips the scroll area, while the heading stays outside it. */
+.studyhub-dialog {
+  max-height: min(90dvh, calc(100dvh - 24px));
+  overflow: hidden;
+  background: var(--white, white);
+}
+.studyhub-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.studyhub-dialog .publication-dialog-head {
+  flex: 0 0 auto;
+}
+.studyhub-dialog .publication-dialog-head h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studyhub-dialog .publication-dialog-head .icon-btn {
+  flex: 0 0 auto;
+}
+.studyhub-dialog .publication-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  margin-bottom: 12px;
+}
+body:has(.studyhub-dialog[open]) {
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  .studyhub-dialog {
+    width: calc(100% - 16px);
+  }
+  .studyhub-dialog .publication-dialog-head {
+    padding: 16px;
+  }
+  .studyhub-dialog .publication-dialog-body {
+    padding: 16px;
+  }
+}

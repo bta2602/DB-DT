@@ -1,5 +1,8 @@
 'use client';
 
+import { SearchSelect } from './search-select';
+import { SearchField } from './search-field';
+
 import { useI18n } from './preferences';
 
 import { useState, type FormEvent } from 'react';
@@ -275,15 +278,14 @@ function MaterialForm({ onClose }: { onClose: () => void }) {
             placeholder={t('Например, конспект первой лекции')}
           />
         </Field>
-        <Field label={t('Предмет')}>
-          <select name="subjectId" required disabled={busy}>
-            {subjects.map((subject) => (
-              <option value={subject.id} key={subject.id}>
-                {subject.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <SearchField
+          label={t('Предмет')}
+          options={subjects}
+          name="subjectId"
+          required
+          disabled={busy}
+          placeholder={t('Выберите значение')}
+        />
         <Field label={t('Файл материала')}>
           <input
             name="file"
@@ -353,16 +355,13 @@ export function MaterialsPanel() {
         </button>
       </div>
       {subjects.length > 1 && (
-        <Field label={t('Предмет материалов')}>
-          <select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>
-            <option value="">{t('Все мои предметы')}</option>
-            {subjects.map((subject) => (
-              <option value={subject.id} key={subject.id}>
-                {subject.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <SearchSelect
+          label={t('Предмет материалов')}
+          options={subjects}
+          value={subjectId}
+          onChange={setSubjectId}
+          placeholder={t('Все мои предметы')}
+        />
       )}
       {materials.length ? (
         <div className="stack">

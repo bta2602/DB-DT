@@ -3,6 +3,10 @@
 import { useI18n } from './preferences';
 
 import Link from 'next/link';
+import { SearchSelect } from './search-select';
+import { SearchField } from './search-field';
+import { SortHeading } from './sort-heading';
+import { sortRows, nextSort, type SortState } from '@/lib/studyhub/table-sort';
 import { LessonEditor } from './lesson-editor';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type {
@@ -19,6 +23,7 @@ import {
   formatDate,
   formatTime,
   lessonStatus,
+  lessonSchedule,
   lessonDay,
   lessonSortKey,
   lessonKindLabel,
@@ -55,25 +60,6 @@ const errorMessage = (error: unknown) =>
 const referenceName = (items: { id: string; name: string }[], id: string | null) =>
   items.find((item) => item.id === id)?.name || '—';
 
-function SelectOptions({
-  items,
-  blank,
-}: {
-  items: { id: string; name: string }[];
-  blank?: string;
-}) {
-  return (
-    <>
-      {blank && <option value="">{blank}</option>}
-      {items.map((item) => (
-        <option key={item.id} value={item.id}>
-          {item.name}
-        </option>
-      ))}
-    </>
-  );
-}
-
 function LessonFilters({
   filters,
   onChange,
@@ -81,6 +67,7 @@ function LessonFilters({
   user,
   full = false,
   disabled = false,
+  resetKey = 0,
 }: {
   filters: ScheduleFilters;
   onChange: (next: ScheduleFilters) => void;
@@ -88,6 +75,7 @@ function LessonFilters({
   user: User | null;
   full?: boolean;
   disabled?: boolean;
+  resetKey?: number;
 }) {
   const { t, locale } = useI18n();
   const labels = scheduleFilterLabels[locale];
@@ -96,31 +84,47 @@ function LessonFilters({
   return (
     <>
       {user?.role !== 'student' && (
-        <Field label={t('Группа')}>
-          <select disabled={disabled} value={filters.group} onChange={select('group')}>
-            <SelectOptions items={scope.groups} blank={t('Все группы')} />
-          </select>
-        </Field>
+        <SearchSelect
+          resetKey={resetKey}
+          label={t('Группа')}
+          options={scope.groups}
+          placeholder={t('Все группы')}
+          value={filters.group}
+          disabled={disabled}
+          onChange={(value) => onChange({ ...filters, group: value })}
+        />
       )}
       {user?.role !== 'teacher' && (
-        <Field label={t('Преподаватель')}>
-          <select disabled={disabled} value={filters.teacher} onChange={select('teacher')}>
-            <SelectOptions items={scope.teachers} blank={labels.allTeachers} />
-          </select>
-        </Field>
+        <SearchSelect
+          resetKey={resetKey}
+          label={t('Преподаватель')}
+          options={scope.teachers}
+          placeholder={labels.allTeachers}
+          value={filters.teacher}
+          disabled={disabled}
+          onChange={(value) => onChange({ ...filters, teacher: value })}
+        />
       )}
-      <Field label={t('Предмет')}>
-        <select disabled={disabled} value={filters.subject} onChange={select('subject')}>
-          <SelectOptions items={scope.subjects} blank={labels.allSubjects} />
-        </select>
-      </Field>
+      <SearchSelect
+        resetKey={resetKey}
+        label={t('Предмет')}
+        options={scope.subjects}
+        placeholder={labels.allSubjects}
+        value={filters.subject}
+        disabled={disabled}
+        onChange={(value) => onChange({ ...filters, subject: value })}
+      />
       {full && (
         <>
-          <Field label={t('Аудитория')}>
-            <select disabled={disabled} value={filters.room} onChange={select('room')}>
-              <SelectOptions items={scope.rooms} blank={labels.allRooms} />
-            </select>
-          </Field>
+          <SearchSelect
+            resetKey={resetKey}
+            label={t('Аудитория')}
+            options={scope.rooms}
+            placeholder={labels.allRooms}
+            value={filters.room}
+            disabled={disabled}
+            onChange={(value) => onChange({ ...filters, room: value })}
+          />
           <Field label={t('Тип занятия')}>
             <select disabled={disabled} value={filters.kind} onChange={select('kind')}>
               <option value="">{labels.allKinds}</option>
@@ -139,17 +143,39 @@ function LessonFilters({
   );
 }
 
-function Table({ headers, children }: { headers: string[]; children: ReactNode }) {
+function Table({
+  headers,
+  children,
+  sort,
+  onSort,
+  actionColumn = true,
+}: {
+  headers: string[];
+  children: ReactNode;
+  sort: SortState;
+  onSort: (key: string) => void;
+  actionColumn?: boolean;
+}) {
   return (
     <div className="card table-wrap">
       <table className="data-table">
         <thead>
           <tr>
-            {headers.map((header, index) => (
-              <th key={`${header}-${index}`} scope="col">
-                {header}
-              </th>
-            ))}
+            {headers.map((header, index) =>
+              actionColumn && index === headers.length - 1 ? (
+                <th key={index} scope="col">
+                  {header}
+                </th>
+              ) : (
+                <SortHeading
+                  key={index}
+                  label={header}
+                  column={String(index)}
+                  sort={sort}
+                  onSort={onSort}
+                />
+              ),
+            )}
           </tr>
         </thead>
         <tbody>{children}</tbody>
@@ -188,6 +214,7 @@ export function LessonList({
 }) {
   const { t } = useI18n();
   const { data, now: snapshotTime } = useStudyHub();
+  lessons = lessons.filter((lesson) => !lesson.archivedAt);
   if (!lessons.length)
     return (
       <div className="card">
@@ -201,11 +228,13 @@ export function LessonList({
     <div className="schedule-list">
       {lessons.map((lesson) => {
         const status = lessonStatus(lesson, now ?? snapshotTime);
+        const schedule = lessonSchedule(lesson, data.lessons);
         return (
           <div className="publication-lesson" key={lesson.id}>
             <div className="lesson-time">
-              {lesson.kind === 'srsp' ? t('СРСП') : formatTime(lesson.startsAt)}
-              {lesson.endsAt && <small>{formatTime(lesson.endsAt)}</small>}
+              {lesson.kind === 'srsp' ? t('СРСП') : formatTime(schedule.startsAt)}
+              {lesson.kind === 'srsp' && <small>{formatTime(schedule.startsAt)}</small>}
+              {schedule.endsAt && <small>{formatTime(schedule.endsAt)}</small>}
             </div>
             <span className="subject-icon">
               <Icon name="book" />
@@ -217,9 +246,9 @@ export function LessonList({
               </p>
               <small>
                 {referenceName(data.groups, lesson.groupId)}{' '}
-                {lesson.roomId && (
+                {schedule.roomId && (
                   <>
-                    {t('· Ауд.')} {referenceName(data.rooms, lesson.roomId)}
+                    {t('· Ауд.')} {referenceName(data.rooms, schedule.roomId)}
                   </>
                 )}
               </small>
@@ -386,21 +415,27 @@ function DirectoryEditor({
                 {t('Сначала добавьте преподавателя, группу и предмет в соседних вкладках.')}
               </p>
             )}
-            <Field label={t('Преподаватель')}>
-              <select name="teacherId" required>
-                <SelectOptions items={teachers} />
-              </select>
-            </Field>
-            <Field label={t('Группа')}>
-              <select name="groupId" required>
-                <SelectOptions items={data.groups} />
-              </select>
-            </Field>
-            <Field label={t('Предмет')}>
-              <select name="subjectId" required>
-                <SelectOptions items={data.subjects} />
-              </select>
-            </Field>
+            <SearchField
+              label={t('Преподаватель')}
+              name="teacherId"
+              options={teachers}
+              placeholder={t('Выберите значение')}
+              required
+            />
+            <SearchField
+              label={t('Группа')}
+              name="groupId"
+              options={data.groups}
+              placeholder={t('Выберите значение')}
+              required
+            />
+            <SearchField
+              label={t('Предмет')}
+              name="subjectId"
+              options={data.subjects}
+              placeholder={t('Выберите значение')}
+              required
+            />
           </>
         ) : (
           <Field label={kind === 'users' ? t('Имя и фамилия') : t('Название')}>
@@ -433,11 +468,13 @@ function DirectoryEditor({
               </select>
             </Field>
             {role === 'student' && (
-              <Field label={t('Группа студента')}>
-                <select name="groupId" defaultValue={oldUser?.groupId || ''}>
-                  <SelectOptions items={data.groups} blank={t('Без группы')} />
-                </select>
-              </Field>
+              <SearchField
+                label={t('Группа студента')}
+                name="groupId"
+                options={data.groups}
+                defaultValue={oldUser?.groupId || ''}
+                placeholder={t('Без группы')}
+              />
             )}
             {!item && (
               <div className="field">
@@ -482,11 +519,13 @@ function DirectoryEditor({
                 defaultValue={oldGroup?.course || 1}
               />
             </Field>
-            <Field label={t('Куратор')}>
-              <select name="curatorId" defaultValue={oldGroup?.curatorId || ''}>
-                <SelectOptions items={teachers} blank={t('Не назначен')} />
-              </select>
-            </Field>
+            <SearchField
+              label={t('Куратор')}
+              name="curatorId"
+              options={teachers}
+              defaultValue={oldGroup?.curatorId || ''}
+              placeholder={t('Не назначен')}
+            />
           </>
         )}
         {kind === 'rooms' && (
@@ -521,10 +560,13 @@ export function AdminOverview() {
   const { data, user, now } = useStudyHub();
   const [editing, setEditing] = useState<Lesson | 'new' | null>(null);
   const [selection, setSelection] = useState(emptyScheduleFilters);
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const scope = scheduleScope(data, user);
   const filters = normalizeScheduleFilters(selection, scope, user);
   const labels = scheduleFilterLabels[locale];
-  const filtered = scope.lessons.filter((lesson) => matchesScheduleFilters(lesson, filters));
+  const filtered = scope.lessons.filter((lesson) =>
+    matchesScheduleFilters(lesson, filters, data.lessons),
+  );
   const active = filtered
     .filter((lesson) => lessonStatus(lesson, now) === 'current')
     .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
@@ -546,8 +588,21 @@ export function AdminOverview() {
       />
       <SetupHint onOpen={() => setEditing('new')} />
       <div className="publication-toolbar">
-        <LessonFilters filters={filters} onChange={setSelection} scope={scope} user={user} />
-        <button type="button" className="button" onClick={() => setSelection(emptyScheduleFilters)}>
+        <LessonFilters
+          filters={filters}
+          resetKey={filterResetKey}
+          onChange={setSelection}
+          scope={scope}
+          user={user}
+        />
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            setSelection(emptyScheduleFilters);
+            setFilterResetKey((key) => key + 1);
+          }}
+        >
           {labels.reset}
         </button>
       </div>
@@ -603,6 +658,7 @@ export function SchedulePage() {
   const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
   const [date, setDate] = useState(() => dateKey(new Date(now)));
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const storage = useBrowserStorage({
     userId: user?.id,
     area: 'filters',
@@ -613,7 +669,9 @@ export function SchedulePage() {
   const scope = scheduleScope(data, user);
   const filters = normalizeScheduleFilters(storage.value, scope, user);
   const mode = filters.mode;
-  const filtered = scope.lessons.filter((lesson) => matchesScheduleFilters(lesson, filters));
+  const filtered = scope.lessons.filter((lesson) =>
+    matchesScheduleFilters(lesson, filters, data.lessons),
+  );
   const [editing, setEditing] = useState<Lesson | 'new' | null>(null);
   const admin = user?.role === 'admin';
   const labels = scheduleFilterLabels[locale];
@@ -662,6 +720,7 @@ export function SchedulePage() {
         </Field>
         <LessonFilters
           filters={filters}
+          resetKey={filterResetKey}
           onChange={storage.setValue}
           scope={scope}
           user={user}
@@ -691,7 +750,15 @@ export function SchedulePage() {
         <button type="button" className="button" onClick={() => setDate(dateKey(new Date(now)))}>
           {t('Сегодня')}
         </button>
-        <button type="button" className="button" disabled={!storage.ready} onClick={storage.reset}>
+        <button
+          type="button"
+          className="button"
+          disabled={!storage.ready}
+          onClick={() => {
+            storage.reset();
+            setFilterResetKey((key) => key + 1);
+          }}
+        >
           {labels.reset}
         </button>
       </div>
@@ -730,12 +797,15 @@ export function RoomsPage() {
   const { data, now, user, ready, error } = useStudyHub();
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
   const [occupancy, setOccupancy] = useState('');
+  const [sort, setSort] = useState<SortState>({ key: '0', direction: 'asc' });
   const labels = scheduleFilterLabels[locale];
   // Only the administrator's bootstrap contains the full school timetable.
   const availabilityKnown = user?.role === 'admin' && ready && !error;
   const occupied = new Map(
     data.lessons
-      .filter((lesson) => lesson.roomId && lessonStatus(lesson, now) === 'current')
+      .filter(
+        (lesson) => !lesson.archivedAt && lesson.roomId && lessonStatus(lesson, now) === 'current',
+      )
       .map((lesson) => [lesson.roomId, lesson]),
   );
   const rooms = data.rooms.filter(
@@ -776,8 +846,24 @@ export function RoomsPage() {
         {labels.found}: {rooms.length}
       </p>
       {rooms.length ? (
-        <Table headers={[t('Аудитория'), t('Вместимость'), t('Сейчас'), t('Действие')]}>
-          {rooms.map((room) => {
+        <Table
+          sort={sort}
+          onSort={(key) => setSort(nextSort(sort, key))}
+          headers={[t('Аудитория'), t('Вместимость'), t('Сейчас'), t('Действие')]}
+        >
+          {sortRows(
+            rooms,
+            sort,
+            (room, key) =>
+              key === '1'
+                ? room.capacity
+                : key === '2'
+                  ? availabilityKnown
+                    ? Number(occupied.has(room.id))
+                    : null
+                  : room.name,
+            locale,
+          ).map((room) => {
             const lesson = occupied.get(room.id);
             return (
               <tr key={room.id}>
@@ -847,6 +933,11 @@ export function PeoplePage() {
   const [course, setCourse] = useState('');
   const [teacherSubject, setTeacherSubject] = useState('');
   const [page, setPage] = useState(0);
+  const [sort, setSort] = useState<SortState>({ key: '0', direction: 'asc' });
+  const changeSort = (key: string) => {
+    setSort(nextSort(sort, key));
+    setPage(0);
+  };
   const labels = scheduleFilterLabels[locale];
   const courses = [...new Set(data.groups.map((item) => item.course))].sort((a, b) => a - b);
   const search = query.trim().toLocaleLowerCase(locale);
@@ -873,6 +964,39 @@ export function PeoplePage() {
         referenceName(data.groups, item.groupId),
         referenceName(data.subjects, item.subjectId),
       ),
+    ),
+  };
+  const sorted = {
+    users: sortRows(
+      filtered.users,
+      sort,
+      (item, key) => (key === '1' ? item.email : key === '2' ? t(roles[item.role]) : item.name),
+      locale,
+    ),
+    groups: sortRows(
+      filtered.groups,
+      sort,
+      (item, key) =>
+        key === '1'
+          ? item.course
+          : key === '2'
+            ? item.curatorId
+              ? referenceName(data.users, item.curatorId)
+              : null
+            : item.name,
+      locale,
+    ),
+    subjects: sortRows(filtered.subjects, sort, (item) => item.name, locale),
+    teachingAssignments: sortRows(
+      filtered.teachingAssignments,
+      sort,
+      (item, key) =>
+        key === '1'
+          ? referenceName(data.groups, item.groupId)
+          : key === '2'
+            ? referenceName(data.subjects, item.subjectId)
+            : referenceName(data.users, item.teacherId),
+      locale,
     ),
   };
   const pageSize = 25;
@@ -938,6 +1062,7 @@ export function PeoplePage() {
             aria-pressed={tab === value}
             onClick={() => {
               setTab(value as typeof tab);
+              setSort({ key: '0', direction: 'asc' });
               setQuery('');
               setPage(0);
             }}
@@ -978,31 +1103,29 @@ export function PeoplePage() {
                 ))}
               </select>
             </Field>
-            <Field label={t('Учебная группа')}>
-              <select
-                value={group}
-                onChange={(event) => {
-                  setGroup(event.target.value);
-                  setRole(event.target.value ? 'student' : role);
-                  setTeacherSubject('');
+            <SearchSelect
+              label={t('Учебная группа')}
+              options={data.groups}
+              value={group}
+              placeholder={t('Все группы')}
+              onChange={(value) => {
+                setGroup(value);
+                setRole(value ? 'student' : role);
+                setTeacherSubject('');
+                setPage(0);
+              }}
+            />
+            {role === 'teacher' && (
+              <SearchSelect
+                label={t('Предмет')}
+                options={data.subjects}
+                value={teacherSubject}
+                placeholder={labels.allSubjects}
+                onChange={(value) => {
+                  setTeacherSubject(value);
                   setPage(0);
                 }}
-              >
-                <SelectOptions items={data.groups} blank={t('Все группы')} />
-              </select>
-            </Field>
-            {role === 'teacher' && (
-              <Field label={t('Предмет')}>
-                <select
-                  value={teacherSubject}
-                  onChange={(event) => {
-                    setTeacherSubject(event.target.value);
-                    setPage(0);
-                  }}
-                >
-                  <SelectOptions items={data.subjects} blank={labels.allSubjects} />
-                </select>
-              </Field>
+              />
             )}
           </>
         )}
@@ -1052,9 +1175,14 @@ export function PeoplePage() {
           }
         />
       ) : (
-        <Table headers={headers[tab]}>
+        <Table
+          headers={headers[tab]}
+          sort={sort}
+          onSort={changeSort}
+          actionColumn={tab !== 'teachingAssignments'}
+        >
           {tab === 'users' &&
-            filtered.users.slice(start, start + pageSize).map((user) => (
+            sorted.users.slice(start, start + pageSize).map((user) => (
               <tr key={user.id}>
                 <td>
                   <Person user={user} />
@@ -1065,7 +1193,7 @@ export function PeoplePage() {
               </tr>
             ))}
           {tab === 'groups' &&
-            filtered.groups.slice(start, start + pageSize).map((group) => (
+            sorted.groups.slice(start, start + pageSize).map((group) => (
               <tr key={group.id}>
                 <td>{group.name}</td>
                 <td>{group.course}</td>
@@ -1074,14 +1202,14 @@ export function PeoplePage() {
               </tr>
             ))}
           {tab === 'subjects' &&
-            filtered.subjects.slice(start, start + pageSize).map((subject) => (
+            sorted.subjects.slice(start, start + pageSize).map((subject) => (
               <tr key={subject.id}>
                 <td>{subject.name}</td>
                 <td>{editButton('subjects', subject)}</td>
               </tr>
             ))}
           {tab === 'teachingAssignments' &&
-            filtered.teachingAssignments.slice(start, start + pageSize).map((assignment) => (
+            sorted.teachingAssignments.slice(start, start + pageSize).map((assignment) => (
               <tr key={`${assignment.teacherId}:${assignment.groupId}:${assignment.subjectId}`}>
                 <td>{referenceName(data.users, assignment.teacherId)}</td>
                 <td>{referenceName(data.groups, assignment.groupId)}</td>

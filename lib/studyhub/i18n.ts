@@ -18,6 +18,7 @@ export const dictionary: Record<string, readonly [kk: string, en: string]> = {
   СРСП: ['СРСП', 'Guided self-study'],
   'Время занятия': ['Сабақ уақыты', 'Class time'],
   'Выберите пару': ['Сабақ уақытын таңдаңыз', 'Select a class slot'],
+  'Выберите значение': ['Мәнді таңдаңыз', 'Select a value'],
   'Выберите тип занятия': ['Сабақ түрін таңдаңыз', 'Select a class type'],
   'Нет доступных занятий': ['Қолжетімді сабақтар жоқ', 'No available classes'],
   'Сначала восстановите связанную практику.': [

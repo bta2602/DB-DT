@@ -32,6 +32,7 @@ export function isScheduleFilters(value: unknown): value is ScheduleFilters {
 /** Scope records before applying any optional user-selected filter. */
 export function scheduleScope(data: Bootstrap, user: User | null) {
   const lessons = data.lessons.filter((lesson) => {
+    if (lesson.archivedAt) return false;
     if (user?.role === 'admin') return true;
     if (user?.role === 'teacher') return lesson.teacherId === user.id;
     return Boolean(user?.groupId && lesson.groupId === user.groupId);
@@ -75,12 +76,19 @@ export function normalizeScheduleFilters(
   };
 }
 
-export function matchesScheduleFilters(lesson: Lesson, filters: ScheduleFilters) {
+export function matchesScheduleFilters(
+  lesson: Lesson,
+  filters: ScheduleFilters,
+  lessons: readonly Lesson[] = [],
+) {
+  const roomId = lesson.practiceId
+    ? lessons.find((item) => item.id === lesson.practiceId)?.roomId
+    : lesson.roomId;
   return (
     (!filters.group || lesson.groupId === filters.group) &&
     (!filters.teacher || lesson.teacherId === filters.teacher) &&
     (!filters.subject || lesson.subjectId === filters.subject) &&
-    (!filters.room || lesson.roomId === filters.room) &&
+    (!filters.room || roomId === filters.room) &&
     (!filters.kind || lesson.kind === filters.kind)
   );
 }

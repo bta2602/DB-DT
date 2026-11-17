@@ -94,6 +94,8 @@ export type Lesson = {
   /** Legacy records retain their original display label. New writes use LessonKind. */
   kind: string;
   status: 'scheduled' | 'cancelled';
+  /** Hidden from the timetable; linked grades, assignments and submissions are retained. */
+  archivedAt?: string | null;
   note: string;
   version: number;
   attendanceVersion: number;
@@ -433,6 +435,13 @@ export const endpoints = {
     method: 'PATCH',
     path: '/api/lessons/:id',
     request: 'LessonPatch',
+    response: 'MutationResult',
+  },
+
+  archiveLesson: {
+    method: 'DELETE',
+    path: '/api/lessons/:id',
+    request: '{ version: number }',
     response: 'MutationResult',
   },
 

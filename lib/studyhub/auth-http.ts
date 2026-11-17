@@ -8,6 +8,7 @@ import {
   registerStudent,
   saveDirectory,
   saveLesson,
+  archiveLesson,
   getRoomAvailability,
   saveAcademicConfig,
   signIn,
@@ -342,6 +343,14 @@ export function lessonMutation(request: NextRequest, id = '') {
     if (id) fields.push('version');
     const input = await body(request, fields);
     return json(await saveLesson(session.user!, input, id));
+  });
+}
+
+export function lessonArchive(request: NextRequest, id: string) {
+  return execute(request, async () => {
+    const session = await adminSession(request);
+    const input = await body(request, ['version']);
+    return json(await archiveLesson(session.user!, id, input));
   });
 }
 

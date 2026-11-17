@@ -83,6 +83,23 @@ export const formatTime = (value?: string | null) =>
 export function lessonDay(lesson: Pick<Lesson, 'date' | 'startsAt'>) {
   return lesson.date || (lesson.startsAt ? dateKey(lesson.startsAt) : '');
 }
+export function isVisibleLesson(lesson: Pick<Lesson, 'archivedAt'>) {
+  return !lesson.archivedAt;
+}
+/** СРСП shows the schedule of its own practice, without reserving another room/slot. */
+export function lessonSchedule(lesson: Lesson, lessons: Lesson[]) {
+  const source =
+    lesson.kind === 'srsp'
+      ? lessons.find((item) => item.id === lesson.practiceId) || lesson
+      : lesson;
+  return {
+    startsAt: source.startsAt,
+    endsAt: source.endsAt,
+    roomId: source.roomId,
+    slotId: source.slotId,
+    date: lessonDay(source),
+  };
+}
 export function lessonSortKey(lesson: Pick<Lesson, 'date' | 'startsAt'>) {
   return lesson.startsAt || `${lesson.date}T23:59:59+05:00`;
 }
@@ -127,12 +144,19 @@ export function lessonConflicts(
   candidate: Partial<Lesson> & Pick<Lesson, 'startsAt' | 'endsAt'>,
   lessons: Lesson[],
 ) {
-  if (candidate.status === 'cancelled' || !candidate.startsAt || !candidate.endsAt) return [];
+  if (
+    candidate.archivedAt ||
+    candidate.status === 'cancelled' ||
+    !candidate.startsAt ||
+    !candidate.endsAt
+  )
+    return [];
   const startsAt = candidate.startsAt;
   const endsAt = candidate.endsAt;
   return lessons.filter(
     (lesson) =>
       lesson.id !== candidate.id &&
+      !lesson.archivedAt &&
       lesson.status !== 'cancelled' &&
       lesson.startsAt !== null &&
       lesson.endsAt !== null &&

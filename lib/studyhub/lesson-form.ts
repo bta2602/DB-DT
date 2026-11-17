@@ -55,6 +55,7 @@ export function practicesForGroup(data: Bootstrap, groupId: string, excludeId = 
         lesson.id !== excludeId &&
         lesson.groupId === groupId &&
         lesson.status === 'scheduled' &&
+        !lesson.archivedAt &&
         formLessonKind(lesson.kind) === 'practice' &&
         subjectsForDate(data, groupId, lesson.date).some(
           (subject) => subject.id === lesson.subjectId,

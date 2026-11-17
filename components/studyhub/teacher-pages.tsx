@@ -24,6 +24,7 @@ import {
   lessonDay,
   lessonSortKey,
   lessonKindLabel,
+  lessonSchedule,
 } from '@/lib/studyhub/client-utils';
 import { downloadCsv } from '@/lib/studyhub/journal-csv';
 import { formLessonKind, subjectsForDate, teachersForSubject } from '@/lib/studyhub/lesson-form';
@@ -47,6 +48,11 @@ import { AnnouncementsPanel, MaterialsPanel } from './publication-panels';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading, Person } from './shared';
 import { useBrowserStorage } from './use-browser-storage';
 import { StorageFeedback } from './storage-feedback';
+import { SearchSelect } from './search-select';
+import { lessonToolsLabels } from '@/lib/studyhub/lesson-tools-labels';
+import { nextSort, sortRows, type SortState } from '@/lib/studyhub/table-sort';
+import { SortHeading } from './sort-heading';
+import { reviewedJournalTarget, reviewJournalHref } from '@/lib/studyhub/review-journal';
 
 const workLabels = {
   submitted: 'На проверке',
@@ -67,7 +73,10 @@ function teacherScope(data: Bootstrap, user: User | null) {
     item.teacherId === user?.id &&
     pairs.some((pair) => pair.groupId === item.groupId && pair.subjectId === item.subjectId);
   const groups = data.groups.filter((group) => pairs.some((pair) => pair.groupId === group.id));
-  const lessons = data.lessons.filter((lesson) => owns(lesson) && lesson.status !== 'cancelled');
+  const historyLessons = data.lessons.filter(owns);
+  const lessons = historyLessons.filter(
+    (lesson) => !lesson.archivedAt && lesson.status !== 'cancelled',
+  );
   const assignments = data.assignments.filter(owns);
   const roster = (groupId: string) =>
     data.users.filter((student) => student.role === 'student' && student.groupId === groupId);
@@ -84,7 +93,7 @@ function teacherScope(data: Bootstrap, user: User | null) {
       ),
     })),
   );
-  return { pairs, groups, lessons, assignments, roster, subjects, records };
+  return { pairs, groups, lessons, historyLessons, assignments, roster, subjects, records };
 }
 
 type TeacherScope = ReturnType<typeof teacherScope>;
@@ -158,36 +167,20 @@ function TeacherFilterFields({
   ];
   return (
     <>
-      <Field label={t('Группа')}>
-        <select
-          value={filters.groupId}
-          onChange={(event) =>
-            update({ groupId: event.target.value, subjectId: '', type: '', assignmentId: '' })
-          }
-        >
-          <option value="">{t('Все мои группы')}</option>
-          {scope.groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label={t('Предмет')}>
-        <select
-          value={filters.subjectId}
-          onChange={(event) =>
-            update({ subjectId: event.target.value, type: '', assignmentId: '' })
-          }
-        >
-          <option value="">{labels.allSubjects}</option>
-          {subjects.map((subject) => (
-            <option key={subject.id} value={subject.id}>
-              {subject.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <SearchSelect
+        label={t('Группа')}
+        value={filters.groupId}
+        options={scope.groups}
+        placeholder={t('Все мои группы')}
+        onChange={(value) => update({ groupId: value, subjectId: '', type: '', assignmentId: '' })}
+      />
+      <SearchSelect
+        label={t('Предмет')}
+        value={filters.subjectId}
+        options={subjects}
+        placeholder={labels.allSubjects}
+        onChange={(value) => update({ subjectId: value, type: '', assignmentId: '' })}
+      />
       <Field label={t('Тип')}>
         <select
           value={filters.type}
@@ -281,7 +274,8 @@ function TeacherLesson({
   data: Bootstrap;
   current?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const schedule = lessonSchedule(lesson, data.lessons);
   return (
     <article className={current ? 'teacher-lesson' : 'card card-pad'}>
       <Badge kind={current ? '' : 'neutral'}>
@@ -289,17 +283,20 @@ function TeacherLesson({
           ? t('Сейчас на занятии')
           : lesson.kind === 'srsp'
             ? t('СРСП')
-            : `${formatTime(lesson.startsAt)}–${formatTime(lesson.endsAt)}`}
+            : `${formatTime(schedule.startsAt)}–${formatTime(schedule.endsAt)}`}
       </Badge>
       <h2>{title(data.subjects, lesson.subjectId)}</h2>
       <p>
         {title(data.groups, lesson.groupId)} · {t(lessonKindLabel(lesson.kind))}
       </p>
-      {lesson.kind !== 'srsp' && (
+      {schedule.startsAt && (
         <p className="muted">
-          <Icon name="pin" className="sm" /> {title(data.rooms, lesson.roomId)} ·{' '}
-          {formatTime(lesson.startsAt)}–{formatTime(lesson.endsAt)}
+          <Icon name="pin" className="sm" /> {title(data.rooms, schedule.roomId)} ·{' '}
+          {formatTime(schedule.startsAt)}–{formatTime(schedule.endsAt)}
         </p>
+      )}
+      {lesson.kind === 'srsp' && (
+        <p className="small muted">{lessonToolsLabels[locale].inherited}</p>
       )}
       <Link
         className="button primary small mt"
@@ -467,8 +464,18 @@ export function TeacherToday() {
 export function JournalPage() {
   const params = useSearchParams();
   const lessonId = params.get('lesson') || '';
-  // Old ?tab=attendance links now open this same journal.
-  return <JournalContent key={lessonId} requestedLessonId={lessonId} />;
+  const assignmentId = params.get('assignmentId') || '';
+  const studentId = params.get('studentId') || '';
+  const reviewId = params.get('reviewId') || '';
+  return (
+    <JournalContent
+      key={[lessonId, assignmentId, studentId, reviewId].join(':')}
+      requestedLessonId={lessonId}
+      assignmentId={assignmentId}
+      studentId={studentId}
+      reviewId={reviewId}
+    />
+  );
 }
 
 function GradeEditor({
@@ -606,11 +613,34 @@ function GradeEditor({
   );
 }
 
-function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
+function JournalContent({
+  requestedLessonId,
+  assignmentId,
+  studentId,
+  reviewId,
+}: {
+  requestedLessonId: string;
+  assignmentId: string;
+  studentId: string;
+  reviewId: string;
+}) {
   const { t, locale } = useI18n();
   const { data, user, now } = useStudyHub();
   const scope = teacherScope(data, user);
-  const requestedLesson = scope.lessons.find((lesson) => lesson.id === requestedLessonId);
+  const requestedLesson = scope.historyLessons.find((lesson) => lesson.id === requestedLessonId);
+  const linkedRecord = reviewedJournalTarget(scope.records, assignmentId, studentId, reviewId);
+  const linkedTarget = linkedRecord?.assignment || requestedLesson;
+  const highlightRef = useRef<HTMLTableCellElement>(null);
+  const [highlight, setHighlight] = useState(Boolean(linkedRecord));
+  const [sort, setSort] = useState<SortState>({ key: 'name', direction: 'asc' });
+  const ui = lessonToolsLabels[locale];
+  useEffect(() => {
+    if (!highlightRef.current) return;
+    highlightRef.current.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+    highlightRef.current.focus({ preventScroll: true });
+    const timer = setTimeout(() => setHighlight(false), 5000);
+    return () => clearTimeout(timer);
+  }, [assignmentId, studentId, reviewId]);
   const storage = useBrowserStorage({
     userId: user?.id,
     area: 'filters',
@@ -618,30 +648,37 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
     fallback: emptyJournalFilters,
     validate: isJournalFilters,
   });
-  const [fromLink, setFromLink] = useState(Boolean(requestedLesson));
-  const selectedGroup = fromLink ? requestedLesson?.groupId || '' : storage.value.groupId;
+  const [fromLink, setFromLink] = useState(Boolean(linkedTarget));
+  const selectedGroup = fromLink ? linkedTarget?.groupId || '' : storage.value.groupId;
   const groupId = scope.groups.some((group) => group.id === selectedGroup)
     ? selectedGroup
     : scope.groups[0]?.id || '';
   const subjects = scope.subjects(groupId);
-  const selectedSubject = fromLink ? requestedLesson?.subjectId || '' : storage.value.subjectId;
+  const selectedSubject = fromLink ? linkedTarget?.subjectId || '' : storage.value.subjectId;
   const subjectId = subjects.some((subject) => subject.id === selectedSubject)
     ? selectedSubject
     : subjects[0]?.id || '';
-  const query = storage.value.query;
+  const query = fromLink ? '' : storage.value.query;
   const updateFilters = (next: Partial<typeof emptyJournalFilters>) => {
     setFromLink(false);
     storage.setValue({ groupId, subjectId, query, ...next });
   };
   const [editing, setEditing] = useState<{ lessonId: string; studentId: string } | null>(null);
   const students = scope.roster(groupId);
-  const visibleStudents = students.filter((student) =>
-    student.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
+  const filteredStudents = students.filter(
+    (student) =>
+      (!fromLink || !linkedRecord || student.id === linkedRecord.student.id) &&
+      student.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
   );
   const columns = [
-    ...scope.lessons
+    ...scope.historyLessons
       .filter(
-        (item) => item.kind !== 'srsp' && item.groupId === groupId && item.subjectId === subjectId,
+        (item) =>
+          item.kind !== 'srsp' &&
+          item.groupId === groupId &&
+          item.subjectId === subjectId &&
+          ((!item.archivedAt && item.status !== 'cancelled') ||
+            data.grades.some((grade) => grade.lessonId === item.id)),
       )
       .map((item) => ({
         kind: 'lesson' as const,
@@ -669,6 +706,17 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
     const work = works.get(`${column.id}:${studentId}`);
     return work?.status === 'reviewed' ? work.grade : null;
   };
+  const visibleStudents = sortRows(
+    filteredStudents,
+    sort,
+    (student, key) => {
+      if (key === 'name') return student.name;
+      if (key === 'average') return average(columns.map((column) => scoreFor(column, student.id)));
+      const column = columns.find((item) => item.kind + ':' + item.id === key);
+      return column ? scoreFor(column, student.id) : null;
+    },
+    locale,
+  );
   const exportLabel = {
     ru: 'Скачать CSV',
     kk: 'CSV жүктеу',
@@ -730,6 +778,19 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
           </button>
         }
       />
+      {linkedRecord && (
+        <div className="review-journal-actions">
+          <Link className="button" href={'/review?work=' + encoded(linkedRecord.work!.id)}>
+            {ui.backReview}
+          </Link>
+          {fromLink && (
+            <button type="button" className="button" onClick={() => setFromLink(false)}>
+              {ui.showAllStudents}
+            </button>
+          )}
+          {highlight && <span role="status">{ui.highlighted}</span>}
+        </div>
+      )}
       {!scope.groups.length ? (
         <EmptyState
           title={t('Группы ещё не назначены')}
@@ -739,36 +800,22 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
         <>
           <div className="teacher-toolbar">
             <div className="teacher-filters">
-              <Field label={t('Учебная группа')}>
-                <select
-                  aria-label={t('Группа журнала')}
-                  disabled={!storage.ready}
-                  value={groupId}
-                  onChange={(event) => {
-                    updateFilters({ groupId: event.target.value, subjectId: '', query: '' });
-                  }}
-                >
-                  {scope.groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('Предмет')}>
-                <select
-                  aria-label={t('Предмет журнала')}
-                  disabled={!storage.ready}
-                  value={subjectId}
-                  onChange={(event) => updateFilters({ subjectId: event.target.value })}
-                >
-                  {subjects.map((subject) => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <SearchSelect
+                label={t('Учебная группа')}
+                value={groupId}
+                options={scope.groups}
+                placeholder={t('Группа')}
+                disabled={!storage.ready}
+                onChange={(value) => updateFilters({ groupId: value, subjectId: '', query: '' })}
+              />
+              <SearchSelect
+                label={t('Предмет')}
+                value={subjectId}
+                options={subjects}
+                placeholder={t('Предмет')}
+                disabled={!storage.ready}
+                onChange={(value) => updateFilters({ subjectId: value })}
+              />
             </div>
             <label className="search-field">
               <Icon name="search" className="sm" />
@@ -821,27 +868,27 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
                 <table className="teacher-grade-table">
                   <thead>
                     <tr>
-                      <th>{t('Студент')}</th>
+                      <SortHeading
+                        label={t('Студент')}
+                        column="name"
+                        sort={sort}
+                        onSort={(key) => setSort(nextSort(sort, key))}
+                      />
                       {columns.map((column) => (
-                        <th
-                          key={`${column.kind}-${column.id}`}
-                          className={
-                            column.id === requestedLessonId ? 'journal-current-column' : ''
-                          }
-                        >
-                          <strong>{formatDate(column.date, locale)}</strong>
-                          <small>
-                            {column.label}
-                            {column.kind === 'lesson' && Date.parse(column.date) > now && (
-                              <>
-                                <br />
-                                {t('Будущее занятие')}
-                              </>
-                            )}
-                          </small>
-                        </th>
+                        <SortHeading
+                          key={column.kind + column.id}
+                          label={formatDate(column.date, locale) + ' · ' + column.label}
+                          column={column.kind + ':' + column.id}
+                          sort={sort}
+                          onSort={(key) => setSort(nextSort(sort, key))}
+                        />
                       ))}
-                      <th>{t('Средний балл')}</th>
+                      <SortHeading
+                        label={t('Средний балл')}
+                        column="average"
+                        sort={sort}
+                        onSort={(key) => setSort(nextSort(sort, key))}
+                      />
                     </tr>
                   </thead>
                   <tbody>
@@ -857,7 +904,31 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
                             const work = works.get(`${column.id}:${student.id}`);
                             const score = scoreFor(column, student.id);
                             return (
-                              <td key={`${column.kind}-${column.id}`}>
+                              <td
+                                key={`${column.kind}-${column.id}`}
+                                ref={
+                                  column.kind === 'assignment' &&
+                                  column.id === linkedRecord?.assignment.id &&
+                                  student.id === linkedRecord.student.id
+                                    ? highlightRef
+                                    : undefined
+                                }
+                                tabIndex={
+                                  column.kind === 'assignment' &&
+                                  column.id === linkedRecord?.assignment.id &&
+                                  student.id === linkedRecord.student.id
+                                    ? -1
+                                    : undefined
+                                }
+                                className={
+                                  highlight &&
+                                  column.kind === 'assignment' &&
+                                  column.id === linkedRecord?.assignment.id &&
+                                  student.id === linkedRecord.student.id
+                                    ? 'journal-highlight-cell'
+                                    : ''
+                                }
+                              >
                                 {column.kind === 'assignment' ? (
                                   work ? (
                                     <Link
@@ -884,7 +955,10 @@ function JournalContent({ requestedLessonId }: { requestedLessonId: string }) {
                                       title: column.label,
                                     })}
                                     aria-haspopup="dialog"
-                                    disabled={Date.parse(column.date) > now}
+                                    disabled={
+                                      Date.parse(column.date) > now ||
+                                      !scope.lessons.some((lesson) => lesson.id === column.id)
+                                    }
                                     onClick={() =>
                                       setEditing({ lessonId: column.id, studentId: student.id })
                                     }
@@ -1266,6 +1340,14 @@ function ReviewWorkspace({
               {t(error)}
             </p>
           )}
+          {work.status === 'reviewed' && !busy && !drafts.reviews[work.id] && (
+            <Link
+              className="button primary full"
+              href={reviewJournalHref(assignment.id, student.id, work.id)}
+            >
+              {lessonToolsLabels[locale].journal}
+            </Link>
+          )}
           <div className="feedback-actions">
             <button
               type="button"
@@ -1378,6 +1460,7 @@ function ReviewContent({
     setFromLink(false);
     storage.setValue({ ...filters, ...next });
   };
+  const [sort, setSort] = useState<SortState>({ key: 'submittedAt', direction: 'asc' });
   const [info, setInfo] = useState<Assignment | null>(null);
   const filteredRecords = scope.records
     .filter(
@@ -1392,8 +1475,18 @@ function ReviewContent({
           .includes(query.trim().toLocaleLowerCase(locale)),
     )
     .sort((a, b) => (a.work?.submittedAt || '').localeCompare(b.work?.submittedAt || ''));
-  const rows = filteredRecords.filter(
-    (record) => status === 'all' || (record.work?.status || 'missing') === status,
+  const rows = sortRows(
+    filteredRecords.filter(
+      (record) => status === 'all' || (record.work?.status || 'missing') === status,
+    ),
+    sort,
+    (record, key) => {
+      if (key === 'student') return record.student.name;
+      if (key === 'assignment') return record.assignment.title;
+      if (key === 'status') return t(workLabels[record.work?.status || 'missing']);
+      return record.work?.submittedAt ? Date.parse(record.work.submittedAt) : null;
+    },
+    locale,
   );
   const selected = scope.records.find((record) => record.work?.id === selectedId);
   if (selected?.work) {
@@ -1453,27 +1546,20 @@ function ReviewContent({
             update={updateFilters}
             kinds={scope.assignments.map((assignment) => assignment.type)}
           />
-          <Field label={t('Задание')}>
-            <select
-              aria-label={t('Задание в очереди')}
-              value={assignmentId}
-              onChange={(event) => updateFilters({ assignmentId: event.target.value })}
-            >
-              <option value="">{t('Все задания')}</option>
-              {scope.assignments
-                .filter(
-                  (assignment) =>
-                    (!groupId || assignment.groupId === groupId) &&
-                    (!filters.subjectId || assignment.subjectId === filters.subjectId) &&
-                    (!filters.type || assignment.type === filters.type),
-                )
-                .map((assignment) => (
-                  <option key={assignment.id} value={assignment.id}>
-                    {assignment.title}
-                  </option>
-                ))}
-            </select>
-          </Field>
+          <SearchSelect
+            label={t('Задание')}
+            value={assignmentId}
+            placeholder={t('Все задания')}
+            options={scope.assignments
+              .filter(
+                (assignment) =>
+                  (!groupId || assignment.groupId === groupId) &&
+                  (!filters.subjectId || assignment.subjectId === filters.subjectId) &&
+                  (!filters.type || assignment.type === filters.type),
+              )
+              .map((assignment) => ({ id: assignment.id, name: assignment.title }))}
+            onChange={(value) => updateFilters({ assignmentId: value })}
+          />
         </fieldset>
         <div className="search-field">
           <Icon name="search" className="sm" />
@@ -1518,10 +1604,30 @@ function ReviewContent({
           <table className="review-table">
             <thead>
               <tr>
-                <th>{t('Студент')}</th>
-                <th>{t('Задание')}</th>
-                <th>{t('Сдача')}</th>
-                <th>{t('Статус')}</th>
+                <SortHeading
+                  label={t('Студент')}
+                  column="student"
+                  sort={sort}
+                  onSort={(key) => setSort(nextSort(sort, key))}
+                />
+                <SortHeading
+                  label={t('Задание')}
+                  column="assignment"
+                  sort={sort}
+                  onSort={(key) => setSort(nextSort(sort, key))}
+                />
+                <SortHeading
+                  label={t('Сдача')}
+                  column="submittedAt"
+                  sort={sort}
+                  onSort={(key) => setSort(nextSort(sort, key))}
+                />
+                <SortHeading
+                  label={t('Статус')}
+                  column="status"
+                  sort={sort}
+                  onSort={(key) => setSort(nextSort(sort, key))}
+                />
                 <th>{t('Действие')}</th>
               </tr>
             </thead>
@@ -1704,41 +1810,33 @@ function NewAssignment({
           />
         </Field>
         <div className="form-row">
-          <Field label={t('Группа')}>
-            <select
-              name="groupId"
-              value={groupId}
-              disabled={busy}
-              onChange={(event) => {
-                setGroupId(event.target.value);
-                setSelectedSubject('');
-                setSelectedLesson('');
-              }}
-            >
-              {scope.groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t('Предмет')}>
-            <select
-              name="subjectId"
-              value={subjectId}
-              disabled={busy}
-              onChange={(event) => {
-                setSelectedSubject(event.target.value);
-                setSelectedLesson('');
-              }}
-            >
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <SearchSelect
+            label={t('Группа')}
+            name="groupId"
+            options={scope.groups}
+            value={groupId}
+            required
+            disabled={busy}
+            placeholder={labels.choose}
+            onChange={(value) => {
+              setGroupId(value);
+              setSelectedSubject('');
+              setSelectedLesson('');
+            }}
+          />
+          <SearchSelect
+            label={t('Предмет')}
+            name="subjectId"
+            options={subjects}
+            value={subjectId}
+            required
+            disabled={busy}
+            placeholder={labels.choose}
+            onChange={(value) => {
+              setSelectedSubject(value);
+              setSelectedLesson('');
+            }}
+          />
         </div>
         <div className="form-row">
           <Field label={t('Срок сдачи (UTC+5)')}>
@@ -1755,30 +1853,27 @@ function NewAssignment({
           disabled={busy}
         />
         <p className="small muted">{labels.assignmentHint}</p>
-        <Field label={t('Занятие')}>
-          <select
-            name="lessonId"
-            required
-            value={linkedLesson?.id || ''}
-            disabled={busy || !lessons.length}
-            onChange={(event) => setSelectedLesson(event.target.value)}
-          >
-            {!lessons.length && <option value="">{t('Нет доступных занятий')}</option>}
-            {lessons.map((lesson) => (
-              <option key={lesson.id} value={lesson.id}>
-                {formatDate(lessonDay(lesson), locale)} · {formatTime(lesson.startsAt)} ·{' '}
-                {t(lessonKindLabel(lesson.kind))}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <SearchSelect
+          label={t('Занятие')}
+          name="lessonId"
+          required
+          value={linkedLesson?.id || ''}
+          disabled={busy || !lessons.length}
+          options={lessons.map((lesson) => ({
+            id: lesson.id,
+            name:
+              formatDate(lessonDay(lesson), locale) +
+              ' · ' +
+              formatTime(lessonSchedule(lesson, data.lessons).startsAt) +
+              ' · ' +
+              t(lessonKindLabel(lesson.kind)),
+          }))}
+          placeholder={labels.choose}
+          onChange={setSelectedLesson}
+        />
         {!lessons.length && <p className="small muted">{labels.noLessons}</p>}
         {linkedLesson?.kind === 'srsp' && (
-          <p className="small muted">
-            {t(
-              'Дата СРСП совпадает с датой выбранной практики. Аудитория и время отдельно не назначаются.',
-            )}
-          </p>
+          <p className="small muted">{lessonToolsLabels[locale].inherited}</p>
         )}
         <Field label={t('Условия выполнения')}>
           <textarea

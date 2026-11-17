@@ -12,6 +12,10 @@ import {
   migrateSqliteAcademic,
 } from '../database/migrations/academic-data.mjs';
 import { readSqliteSnapshot, importSqliteSnapshot } from '../scripts/import-sqlite-to-postgres.mjs';
+import {
+  migrateSqliteLessonArchive,
+  lessonArchiveMigrationKey,
+} from '../database/migrations/lesson-archive.mjs';
 
 const legacySchema = await readFile(
   new URL('./fixtures/academic-legacy.sql', import.meta.url),
@@ -221,4 +225,57 @@ test('An academic marker without the corresponding map and period schema is reje
     .run(academicMigrationKey, '1');
   source.close();
   await assert.rejects(readSqliteSnapshot(filename), /Маркер академической миграции/);
+});
+
+test('Pre-archive snapshots remain readable, but an archive marker without its column is rejected', async (t) => {
+  const filename = await sourceFixture(t, false);
+  const source = new DatabaseSync(filename);
+  try {
+    source.exec('ALTER TABLE school_lessons DROP COLUMN archived_at');
+    const snapshot = await readSqliteSnapshot(filename);
+    assert.equal(
+      snapshot.tables.school_lessons.columns.some((column) => column.name === 'archived_at'),
+      false,
+    );
+    source
+      .prepare('INSERT INTO studyhub_settings(key,value) VALUES (?,?)')
+      .run(lessonArchiveMigrationKey, '1');
+    await assert.rejects(readSqliteSnapshot(filename), /Маркер архива занятий/);
+  } finally {
+    source.close();
+  }
+});
+
+test('Imported archive marker retains hidden lessons and rebuilds its partial indexes', async (t) => {
+  const filename = await sourceFixture(t);
+  const source = new DatabaseSync(filename);
+  try {
+    migrateSqliteLessonArchive(source);
+    source.exec(
+      "UPDATE school_lessons SET archived_at='2026-11-17T04:00:00.000Z' WHERE id IN ('practice','srsp')",
+    );
+  } finally {
+    source.close();
+  }
+  const snapshot = await readSqliteSnapshot(filename);
+  const target = recordingTarget(t);
+  assert.equal((await importSqliteSnapshot(target.adapter, snapshot)).imported, true);
+  assert.equal(
+    target.sqlite
+      .prepare('SELECT value FROM studyhub_settings WHERE key=?')
+      .get(lessonArchiveMigrationKey).value,
+    '1',
+  );
+  assert.equal(
+    target.sqlite
+      .prepare('SELECT count(*) AS total FROM school_lessons WHERE archived_at IS NOT NULL')
+      .get().total,
+    2,
+  );
+  for (const name of ['school_lessons_visible_time', 'school_lessons_visible_practice']) {
+    assert.ok(
+      target.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?").get(name),
+    );
+  }
+  assert.equal((await importSqliteSnapshot(target.adapter, snapshot)).imported, false);
 });

@@ -15,6 +15,7 @@ const columns = {
     type: "TEXT CHECK(type IN ('computer','lecture','laboratory','ordinary'))",
   },
   school_lessons: {
+    archived_at: 'TEXT',
     practice_id: 'TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT',
     slot_id:
       "TEXT CHECK(slot_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12'))",
@@ -79,8 +80,9 @@ function dialectExpressions(dialect) {
   return { date, academicYear, semester, time, duration, instant };
 }
 
-function triggerDefinitions(dialect) {
+function triggerDefinitions(dialect, supportsArchive = true) {
   const { academicYear, semester, time, duration, instant } = dialectExpressions(dialect);
+  const visible = (alias) => (supportsArchive ? `${alias}.archived_at IS NULL AND ` : '');
   const lessonRules = [
     [
       "NEW.kind NOT IN ('lecture','practice','srsp') OR NEW.academic_year IS NULL OR NEW.semester IS NULL",
@@ -99,7 +101,7 @@ function triggerDefinitions(dialect) {
       'SRSP must reference a practice without booking a slot',
     ],
     [
-      `NEW.kind='srsp' AND NOT EXISTS (SELECT 1 FROM school_lessons p WHERE p.id=NEW.practice_id AND (${lessonKind('p.kind')})='practice' AND p.group_id=NEW.group_id AND p.subject_id=NEW.subject_id AND p.teacher_id=NEW.teacher_id AND COALESCE(p.academic_year,${academicYear('p.starts_at')})=NEW.academic_year AND COALESCE(p.semester,${semester('p.starts_at')})=NEW.semester)`,
+      `NEW.kind='srsp' AND NOT EXISTS (SELECT 1 FROM school_lessons p WHERE ${visible('p')}p.id=NEW.practice_id AND (${lessonKind('p.kind')})='practice' AND p.group_id=NEW.group_id AND p.subject_id=NEW.subject_id AND p.teacher_id=NEW.teacher_id AND COALESCE(p.academic_year,${academicYear('p.starts_at')})=NEW.academic_year AND COALESCE(p.semester,${semester('p.starts_at')})=NEW.semester)`,
       'SRSP practice must have the same teacher, group, subject and term',
     ],
     [
@@ -119,14 +121,14 @@ function triggerDefinitions(dialect) {
       'Lesson must have a teaching assignment',
     ],
     [
-      `NEW.kind<>'srsp' AND NEW.status='scheduled' AND EXISTS (SELECT 1 FROM school_lessons l WHERE l.id<>NEW.id AND l.status='scheduled' AND l.kind<>'srsp' AND ${instant('l.starts_at')} < ${instant('NEW.ends_at')} AND ${instant('l.ends_at')} > ${instant('NEW.starts_at')} AND (l.group_id=NEW.group_id OR l.teacher_id=NEW.teacher_id OR l.room_id=NEW.room_id))`,
+      `${visible('NEW')}NEW.kind<>'srsp' AND NEW.status='scheduled' AND EXISTS (SELECT 1 FROM school_lessons l WHERE ${visible('l')}l.id<>NEW.id AND l.status='scheduled' AND l.kind<>'srsp' AND ${instant('l.starts_at')} < ${instant('NEW.ends_at')} AND ${instant('l.ends_at')} > ${instant('NEW.starts_at')} AND (l.group_id=NEW.group_id OR l.teacher_id=NEW.teacher_id OR l.room_id=NEW.room_id))`,
       'Lesson overlaps a group, teacher or room booking',
     ],
   ];
   const assignmentRules = [
     ['NEW.lesson_id IS NULL', 'A new assignment must reference a lesson'],
     [
-      `NOT EXISTS (SELECT 1 FROM school_lessons l WHERE l.id=NEW.lesson_id AND (${lessonKind('l.kind')})=NEW.type AND l.group_id=NEW.group_id AND l.subject_id=NEW.subject_id AND l.teacher_id=NEW.teacher_id)`,
+      `NOT EXISTS (SELECT 1 FROM school_lessons l WHERE ${visible('l')}l.id=NEW.lesson_id AND (${lessonKind('l.kind')})=NEW.type AND l.group_id=NEW.group_id AND l.subject_id=NEW.subject_id AND l.teacher_id=NEW.teacher_id)`,
       'Assignment type and identity must match its lesson',
     ],
   ];
@@ -163,7 +165,7 @@ function triggerDefinitions(dialect) {
     'school_lessons',
     'UPDATE',
     lessonRules,
-    `(${changed(scheduleFields)}) OR (OLD.status='cancelled' AND NEW.status='scheduled')`,
+    `(${changed(scheduleFields)}) OR (OLD.status='cancelled' AND NEW.status='scheduled')${supportsArchive ? ' OR (OLD.archived_at IS NOT NULL AND NEW.archived_at IS NULL)' : ''}`,
   );
   add(
     'practice_update',
@@ -263,8 +265,8 @@ function triggerDefinitions(dialect) {
   return rules;
 }
 
-function sqliteTriggers(names) {
-  return triggerDefinitions('sqlite')
+function sqliteTriggers(names, supportsArchive = true) {
+  return triggerDefinitions('sqlite', supportsArchive)
     .filter((rule) => !names || names.includes(rule.name))
     .map(
       ({ name, table, event, checks, when }) => `
@@ -276,8 +278,8 @@ function sqliteTriggers(names) {
     .join('\n');
 }
 
-function postgresTriggers(names) {
-  return triggerDefinitions('postgres')
+function postgresTriggers(names, supportsArchive = true) {
+  return triggerDefinitions('postgres', supportsArchive)
     .filter((rule) => !names || names.includes(rule.name))
     .map(
       ({ name, table, event, checks, when }) => `
@@ -314,12 +316,37 @@ function views(dialect) {
 const lessonTriggerNames = ['academic_lesson_insert', 'academic_lesson_update'];
 export function refreshSqliteLessonTriggers(db) {
   for (const name of lessonTriggerNames) db.exec(`DROP TRIGGER IF EXISTS ${name}`);
-  db.exec(sqliteTriggers(lessonTriggerNames));
+  const supportsArchive = db
+    .prepare('PRAGMA table_info(school_lessons)')
+    .all()
+    .some((column) => column.name === 'archived_at');
+  db.exec(sqliteTriggers(lessonTriggerNames, supportsArchive));
 }
 export async function refreshPostgresLessonTriggers(client) {
+  const columns = await client.query(
+    "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='school_lessons' AND column_name='archived_at'",
+  );
   for (const name of lessonTriggerNames)
     await client.query(`DROP TRIGGER IF EXISTS ${name} ON school_lessons`);
-  await client.query(postgresTriggers(lessonTriggerNames));
+  await client.query(postgresTriggers(lessonTriggerNames, columns.rows.length > 0));
+}
+
+// Refresh only rules affected by archiving; custom triggers and other rules survive.
+const archiveTriggerNames = [
+  ...lessonTriggerNames,
+  'academic_assignment_insert',
+  'academic_assignment_update',
+];
+export function refreshSqliteArchiveTriggers(db) {
+  for (const name of archiveTriggerNames) db.exec(`DROP TRIGGER IF EXISTS ${name}`);
+  db.exec(sqliteTriggers(archiveTriggerNames));
+}
+export async function refreshPostgresArchiveTriggers(client) {
+  for (const name of archiveTriggerNames) {
+    const table = name.includes('assignment') ? 'school_assignments' : 'school_lessons';
+    await client.query(`DROP TRIGGER IF EXISTS ${name} ON ${table}`);
+  }
+  await client.query(postgresTriggers(archiveTriggerNames));
 }
 
 function sqliteHasMarker(db) {

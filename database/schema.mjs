@@ -60,6 +60,7 @@ export const lessonsSchema = `
     room_id TEXT REFERENCES school_rooms(id),
     starts_at TEXT, ends_at TEXT,
     kind TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('scheduled','cancelled')),
+    archived_at TEXT,
     note TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
     attendance_version INTEGER NOT NULL DEFAULT 1,
     practice_id TEXT REFERENCES school_lessons(id) ON DELETE RESTRICT,

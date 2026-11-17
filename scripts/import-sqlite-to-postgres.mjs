@@ -6,6 +6,10 @@ import { pathToFileURL } from 'node:url';
 import { closeDatabase, getDatabase, postgresSchema } from '../database/connection.mjs';
 import { academicSeedMapSchema } from '../database/schema.mjs';
 import {
+  lessonArchiveIndexes,
+  lessonArchiveMigrationKey,
+} from '../database/migrations/lesson-archive.mjs';
+import {
   academicMigrationKey,
   installPostgresAcademicDataObjects,
 } from '../database/migrations/academic-data.mjs';
@@ -148,6 +152,12 @@ export async function readSqliteSnapshot(filename) {
         ))
     ) {
       throw new ImportError('Маркер академической миграции не соответствует исходной схеме.');
+    }
+    if (
+      tables.studyhub_settings.rows.some((row) => row.key === lessonArchiveMigrationKey) &&
+      !tables.school_lessons.columns.some((column) => column.name === 'archived_at')
+    ) {
+      throw new ImportError('Маркер архива занятий не соответствует исходной схеме.');
     }
     const skipped = Object.fromEntries(
       temporaryTables.map((name) => [
@@ -294,7 +304,11 @@ export async function importSqliteSnapshot(db, snapshot) {
     await tx.exec(`
       ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS academic_year INTEGER CHECK(academic_year BETWEEN 1900 AND 9999);
       ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS semester INTEGER CHECK(semester IN (1,2));
+      ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS archived_at TEXT;
     `);
+    // The source may already contain the archive marker. Recreate its indexes
+    // before copying that marker, just as academic triggers are installed below.
+    await tx.exec(lessonArchiveIndexes);
     for (const name of snapshotTableNames(snapshot.tables)) {
       await insertTable(tx, name, snapshot.tables[name]);
       if (name === 'school_groups') await restoreUserGroups(tx, snapshot.tables.auth_users.rows);

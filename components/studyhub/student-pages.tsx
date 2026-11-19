@@ -260,7 +260,7 @@ export function StudentToday() {
         lessonDay(lesson) === today &&
         lesson.status !== 'cancelled',
     )
-    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
+    .sort((a, b) => lessonSortKey(a, data.lessons).localeCompare(lessonSortKey(b, data.lessons)));
   const tasks = data.assignments
     .filter(
       (assignment) =>

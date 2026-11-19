@@ -104,6 +104,7 @@ function useTeacherTaskFilters(
   fallback = emptyTeacherFilters,
 ) {
   const { user } = useStudyHub();
+  const [resetKey, setResetKey] = useState(0);
   const storage = useBrowserStorage({
     userId: user?.id,
     area: 'filters',
@@ -138,6 +139,11 @@ function useTeacherTaskFilters(
   return {
     ...storage,
     filters,
+    resetKey,
+    reset: () => {
+      storage.reset();
+      setResetKey((key) => key + 1);
+    },
     update: (next: Partial<TeacherTaskFilters>) => storage.setValue({ ...filters, ...next }),
   };
 }
@@ -147,12 +153,14 @@ function TeacherFilterFields({
   filters,
   update,
   kinds,
+  resetKey,
   taskFields = true,
 }: {
   scope: TeacherScope;
   filters: TeacherTaskFilters;
   update: (next: Partial<TeacherTaskFilters>) => void;
   kinds: string[];
+  resetKey: number;
   taskFields?: boolean;
 }) {
   const { t, locale } = useI18n();
@@ -169,6 +177,7 @@ function TeacherFilterFields({
     <>
       <SearchSelect
         label={t('Группа')}
+        resetKey={resetKey}
         value={filters.groupId}
         options={scope.groups}
         placeholder={t('Все мои группы')}
@@ -176,6 +185,7 @@ function TeacherFilterFields({
       />
       <SearchSelect
         label={t('Предмет')}
+        resetKey={resetKey}
         value={filters.subjectId}
         options={subjects}
         placeholder={labels.allSubjects}
@@ -323,7 +333,7 @@ export function TeacherToday() {
         (!filters.subjectId || lesson.subjectId === filters.subjectId) &&
         (!filters.type || lesson.kind === filters.type),
     )
-    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
+    .sort((a, b) => lessonSortKey(a, data.lessons).localeCompare(lessonSortKey(b, data.lessons)));
   const current = lessons.find((lesson) => lessonStatus(lesson, now) === 'current');
   const next = lessons.find((lesson) => lessonStatus(lesson, now) === 'upcoming');
   const pending = scope.records.filter(
@@ -356,6 +366,7 @@ export function TeacherToday() {
           <TeacherFilterFields
             scope={scope}
             filters={filters}
+            resetKey={storage.resetKey}
             update={storage.update}
             kinds={scope.lessons.map((lesson) => lesson.kind)}
             taskFields={false}
@@ -1543,11 +1554,13 @@ function ReviewContent({
           <TeacherFilterFields
             scope={scope}
             filters={filters}
+            resetKey={storage.resetKey}
             update={updateFilters}
             kinds={scope.assignments.map((assignment) => assignment.type)}
           />
           <SearchSelect
             label={t('Задание')}
+            resetKey={storage.resetKey}
             value={assignmentId}
             placeholder={t('Все задания')}
             options={scope.assignments
@@ -1956,6 +1969,7 @@ export function AssignmentsPage() {
           <TeacherFilterFields
             scope={scope}
             filters={filters}
+            resetKey={storage.resetKey}
             update={storage.update}
             kinds={scope.assignments.map((assignment) => assignment.type)}
           />

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { lessonSchedule, isVisibleLesson, lessonConflicts } from '../lib/studyhub/client-utils.ts';
+import {
+  lessonSchedule,
+  lessonSortKey,
+  isVisibleLesson,
+  lessonConflicts,
+} from '../lib/studyhub/client-utils.ts';
 import {
   scheduleScope,
   matchesScheduleFilters,
@@ -51,6 +56,69 @@ test('SRSP display follows only its linked practice and does not mutate the stor
   assert.equal(srsp.startsAt, null);
   assert.equal(lessonSchedule(other, [moved]).roomId, 'elsewhere');
 });
+
+test('Timetables place SRSP immediately after its practice, before later lessons', () => {
+  const simultaneous = { ...practice, id: 'q' };
+  const simultaneousSrsp = { ...srsp, id: 'r', practiceId: simultaneous.id };
+  const later = {
+    ...practice,
+    id: 'later',
+    kind: 'lecture',
+    startsAt: '2026-11-17T08:00:00.000Z',
+    endsAt: '2026-11-17T08:50:00.000Z',
+  };
+  const lessons = [simultaneousSrsp, srsp, later, simultaneous, practice];
+  const before = structuredClone(lessons);
+  const sorted = [...lessons].sort((a, b) =>
+    lessonSortKey(a, lessons).localeCompare(lessonSortKey(b, lessons)),
+  );
+  assert.deepEqual(
+    sorted.map((lesson) => lesson.id),
+    ['p', 's', 'q', 'r', 'later'],
+  );
+  assert.deepEqual(lessons, before);
+
+  // A type filter may omit the practice from the visible list, but not from lookup data.
+  assert.deepEqual(
+    [later, srsp]
+      .sort((a, b) => lessonSortKey(a, lessons).localeCompare(lessonSortKey(b, lessons)))
+      .map((lesson) => lesson.id),
+    ['s', 'later'],
+  );
+});
+
+test('SRSP sort follows a moved practice and falls back safely when it is unavailable', () => {
+  const moved = {
+    ...practice,
+    date: '2026-11-18',
+    startsAt: '2026-11-18T03:00:00.000Z',
+    endsAt: '2026-11-18T03:50:00.000Z',
+  };
+  const previousDay = { ...practice, id: 'previous-day' };
+  const nextLesson = {
+    ...moved,
+    id: 'next',
+    kind: 'lecture',
+    startsAt: '2026-11-18T04:00:00.000Z',
+    endsAt: '2026-11-18T04:50:00.000Z',
+  };
+  const lessons = [srsp, nextLesson, moved, previousDay];
+  assert.deepEqual(
+    [...lessons]
+      .sort((a, b) => lessonSortKey(a, lessons).localeCompare(lessonSortKey(b, lessons)))
+      .map((lesson) => lesson.id),
+    ['previous-day', 'p', 's', 'next'],
+  );
+  assert.equal(srsp.startsAt, null);
+  assert.equal(srsp.date, '2026-11-17');
+  assert.deepEqual(
+    [nextLesson, srsp, previousDay]
+      .sort((a, b) => lessonSortKey(a, []).localeCompare(lessonSortKey(b, [])))
+      .map((lesson) => lesson.id),
+    ['previous-day', 's', 'next'],
+  );
+});
+
 test('Archived timetable records are hidden and do not occupy a room', () => {
   const hidden = { ...practice, archivedAt: '2026-11-17T10:00:00.000Z' };
   const candidate = { ...practice, id: 'new' };

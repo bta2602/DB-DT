@@ -100,8 +100,12 @@ export function lessonSchedule(lesson: Lesson, lessons: Lesson[]) {
     date: lessonDay(source),
   };
 }
-export function lessonSortKey(lesson: Pick<Lesson, 'date' | 'startsAt'>) {
-  return lesson.startsAt || `${lesson.date}T23:59:59+05:00`;
+/** Sort timetable rows by displayed time, keeping each practice and its СРСП together. */
+export function lessonSortKey(lesson: Lesson, lessons: Lesson[] = []) {
+  const schedule = lessonSchedule(lesson, lessons);
+  const time = schedule.startsAt || `${schedule.date}T23:59:59+05:00`;
+  const practiceId = lesson.kind === 'srsp' ? lesson.practiceId || lesson.id : lesson.id;
+  return `${time}:${practiceId}:${lesson.kind === 'srsp' ? 1 : 0}:${lesson.id}`;
 }
 export function lessonKindLabel(kind: string) {
   return (

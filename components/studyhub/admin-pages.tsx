@@ -569,11 +569,11 @@ export function AdminOverview() {
   );
   const active = filtered
     .filter((lesson) => lessonStatus(lesson, now) === 'current')
-    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
+    .sort((a, b) => lessonSortKey(a, data.lessons).localeCompare(lessonSortKey(b, data.lessons)));
   const today = dateKey(new Date(now));
   const next = filtered
     .filter((lesson) => lessonStatus(lesson, now) === 'upcoming' && lessonDay(lesson) === today)
-    .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)));
+    .sort((a, b) => lessonSortKey(a, data.lessons).localeCompare(lessonSortKey(b, data.lessons)));
   return (
     <>
       <PageHeading
@@ -774,7 +774,9 @@ export function SchedulePage() {
             <LessonList
               lessons={filtered
                 .filter((lesson) => lessonDay(lesson) === day)
-                .sort((a, b) => lessonSortKey(a).localeCompare(lessonSortKey(b)))}
+                .sort((a, b) =>
+                  lessonSortKey(a, data.lessons).localeCompare(lessonSortKey(b, data.lessons)),
+                )}
               now={now}
               onEdit={admin ? setEditing : undefined}
             />

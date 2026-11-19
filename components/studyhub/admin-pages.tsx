@@ -30,11 +30,12 @@ import {
   roles,
   statusNames,
 } from '@/lib/studyhub/client-utils';
-import { useStudyHub } from './context';
+import { ApiError, useStudyHub } from './context';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading, Person } from './shared';
 import { AnnouncementsPanel } from './publication-panels';
 import { useBrowserStorage } from './use-browser-storage';
 import { StorageFeedback } from './storage-feedback';
+import { readUserName, UserNameFields } from './user-name-fields';
 import {
   emptyScheduleFilters,
   isScheduleFilters,
@@ -341,6 +342,7 @@ function DirectoryEditor({
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [nameErrors, setNameErrors] = useState<Record<string, string>>({});
   const teachers = data.users.filter((user) => user.role === 'teacher');
   const incompleteAssignment =
     kind === 'teachingAssignments' &&
@@ -361,7 +363,9 @@ function DirectoryEditor({
             groupId: value('groupId'),
             subjectId: value('subjectId'),
           }
-        : { name: value('name') };
+        : kind === 'users'
+          ? readUserName(fields)
+          : { name: value('name') };
     if (kind === 'users') {
       Object.assign(body, {
         email: value('email'),
@@ -379,6 +383,7 @@ function DirectoryEditor({
     if (item) body.version = item.version;
     setBusy(true);
     setError('');
+    setNameErrors({});
     try {
       const path = kind === 'teachingAssignments' ? 'teaching-assignments' : kind;
       await mutate(
@@ -391,6 +396,7 @@ function DirectoryEditor({
       else onClose();
     } catch (failure) {
       setError(errorMessage(failure));
+      if (failure instanceof ApiError) setNameErrors(failure.fields);
     } finally {
       setBusy(false);
     }
@@ -437,8 +443,10 @@ function DirectoryEditor({
               required
             />
           </>
+        ) : kind === 'users' ? (
+          <UserNameFields user={oldUser} errors={nameErrors} disabled={busy} />
         ) : (
-          <Field label={kind === 'users' ? t('Имя и фамилия') : t('Название')}>
+          <Field label={t('Название')}>
             <input name="name" required maxLength={120} defaultValue={item?.name || ''} />
           </Field>
         )}
@@ -587,28 +595,32 @@ export function AdminOverview() {
         }
       />
       <SetupHint onOpen={() => setEditing('new')} />
-      <div className="publication-toolbar">
-        <LessonFilters
-          filters={filters}
-          resetKey={filterResetKey}
-          onChange={setSelection}
-          scope={scope}
-          user={user}
-        />
-        <button
-          type="button"
-          className="button"
-          onClick={() => {
-            setSelection(emptyScheduleFilters);
-            setFilterResetKey((key) => key + 1);
-          }}
-        >
-          {labels.reset}
-        </button>
+      <div className="control-panel">
+        <div className="control-grid">
+          <LessonFilters
+            filters={filters}
+            resetKey={filterResetKey}
+            onChange={setSelection}
+            scope={scope}
+            user={user}
+          />
+        </div>
+        <div className="control-actions">
+          <p className="control-status" role="status">
+            {labels.results}: {active.length + next.length}
+          </p>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              setSelection(emptyScheduleFilters);
+              setFilterResetKey((key) => key + 1);
+            }}
+          >
+            {labels.reset}
+          </button>
+        </div>
       </div>
-      <p className="muted" role="status">
-        {labels.results}: {active.length + next.length}
-      </p>
       <Statistics
         items={[
           [active.length, t('Занятий идут сейчас'), 'calendar'],
@@ -693,6 +705,7 @@ export function SchedulePage() {
           day.setUTCDate(day.getUTCDate() + index);
           return day.toISOString().slice(0, 10);
         });
+  const shown = filtered.filter((lesson) => dates.includes(lessonDay(lesson))).length;
   return (
     <>
       <PageHeading
@@ -707,65 +720,79 @@ export function SchedulePage() {
           )
         }
       />
-      <div className="publication-toolbar">
-        <Field label={t('Дата')}>
-          <input
-            type="date"
-            required
-            value={date}
-            onChange={(event) => {
-              if (event.target.value) setDate(event.target.value);
-            }}
-          />
-        </Field>
-        <LessonFilters
-          filters={filters}
-          resetKey={filterResetKey}
-          onChange={storage.setValue}
-          scope={scope}
-          user={user}
-          full
-          disabled={!storage.ready}
-        />
-        <div className="tabs" aria-label={t('Вид расписания')}>
-          {(['day', 'week'] as const).map((value) => (
+      <div className="control-panel">
+        <div className="control-actions schedule-controls">
+          <Field label={t('Дата')}>
+            <input
+              type="date"
+              required
+              value={date}
+              onChange={(event) => {
+                if (event.target.value) setDate(event.target.value);
+              }}
+            />
+          </Field>
+          <div className="control-group">
+            <button type="button" className="button" onClick={() => moveDate(-1)}>
+              <Icon name="arrowLeft" className="sm" />
+              {labels.previous}
+            </button>
             <button
               type="button"
-              key={value}
-              className={mode === value ? 'active' : ''}
-              aria-pressed={mode === value}
-              disabled={!storage.ready}
-              onClick={() => storage.setValue({ ...filters, mode: value })}
+              className="button"
+              onClick={() => setDate(dateKey(new Date(now)))}
             >
-              {value === 'day' ? t('День') : t('Неделя')}
+              {t('Сегодня')}
             </button>
-          ))}
+            <button type="button" className="button" onClick={() => moveDate(1)}>
+              {labels.next}
+              <Icon name="arrow" className="sm" />
+            </button>
+          </div>
+          <div className="tabs" role="group" aria-label={t('Вид расписания')}>
+            {(['day', 'week'] as const).map((value) => (
+              <button
+                type="button"
+                key={value}
+                className={mode === value ? 'active' : ''}
+                aria-pressed={mode === value}
+                disabled={!storage.ready}
+                onClick={() => storage.setValue({ ...filters, mode: value })}
+              >
+                {value === 'day' ? t('День') : t('Неделя')}
+              </button>
+            ))}
+          </div>
         </div>
-        <button type="button" className="button" onClick={() => moveDate(-1)}>
-          ← {labels.previous}
-        </button>
-        <button type="button" className="button" onClick={() => moveDate(1)}>
-          {labels.next} →
-        </button>
-        <button type="button" className="button" onClick={() => setDate(dateKey(new Date(now)))}>
-          {t('Сегодня')}
-        </button>
-        <button
-          type="button"
-          className="button"
-          disabled={!storage.ready}
-          onClick={() => {
-            storage.reset();
-            setFilterResetKey((key) => key + 1);
-          }}
-        >
-          {labels.reset}
-        </button>
+        <div className="control-grid">
+          <LessonFilters
+            filters={filters}
+            resetKey={filterResetKey}
+            onChange={storage.setValue}
+            scope={scope}
+            user={user}
+            full
+            disabled={!storage.ready}
+          />
+        </div>
+        <div className="control-actions">
+          <p className="control-status" role="status">
+            {labels.results}: {shown}
+          </p>
+          <button
+            type="button"
+            className="button"
+            disabled={!storage.ready}
+            onClick={() => {
+              storage.reset();
+              setFilterResetKey((key) => key + 1);
+            }}
+          >
+            {labels.reset}
+          </button>
+        </div>
+        <StorageFeedback status={storage.status} />
       </div>
-      <StorageFeedback status={storage.status} />
-      <p className="muted" role="status">
-        {labels.results}: {filtered.filter((lesson) => dates.includes(lessonDay(lesson))).length}
-      </p>
       {admin && <SetupHint onOpen={() => setEditing('new')} />}
       <div className={mode === 'week' ? 'publication-week' : ''}>
         {dates.map((day) => (
@@ -828,25 +855,29 @@ export function RoomsPage() {
           </button>
         }
       />
-      <div className="publication-toolbar">
-        <Field label={labels.occupancy}>
-          <select
-            value={occupancy}
-            disabled={!availabilityKnown}
-            onChange={(event) => setOccupancy(event.target.value)}
-          >
-            <option value="">{labels.allOccupancy}</option>
-            <option value="free">{t('Свободна')}</option>
-            <option value="busy">{labels.busy}</option>
-          </select>
-        </Field>
-        <button type="button" className="button" onClick={() => setOccupancy('')}>
-          {labels.reset}
-        </button>
+      <div className="control-panel">
+        <div className="control-grid">
+          <Field label={labels.occupancy}>
+            <select
+              value={occupancy}
+              disabled={!availabilityKnown}
+              onChange={(event) => setOccupancy(event.target.value)}
+            >
+              <option value="">{labels.allOccupancy}</option>
+              <option value="free">{t('Свободна')}</option>
+              <option value="busy">{labels.busy}</option>
+            </select>
+          </Field>
+        </div>
+        <div className="control-actions">
+          <p className="control-status" role="status">
+            {labels.found}: {rooms.length}
+          </p>
+          <button type="button" className="button" onClick={() => setOccupancy('')}>
+            {labels.reset}
+          </button>
+        </div>
       </div>
-      <p className="muted" role="status">
-        {labels.found}: {rooms.length}
-      </p>
       {rooms.length ? (
         <Table
           sort={sort}
@@ -930,6 +961,7 @@ export function PeoplePage() {
   const [tab, setTab] = useState<Exclude<DirectoryKind, 'rooms'>>('users');
   const [editing, setEditing] = useState<Editor | null>(null);
   const [query, setQuery] = useState('');
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const [role, setRole] = useState('');
   const [group, setGroup] = useState('');
   const [course, setCourse] = useState('');
@@ -1055,7 +1087,7 @@ export function PeoplePage() {
           [data.groups.length, t('Учебных групп'), 'building'],
         ]}
       />
-      <div className="tabs mb" aria-label={t('Справочники')}>
+      <div className="tabs mb directory-tabs" role="group" aria-label={t('Справочники')}>
         {Object.entries(tabs).map(([value, title]) => (
           <button
             type="button"
@@ -1073,100 +1105,107 @@ export function PeoplePage() {
           </button>
         ))}
       </div>
-      <div className="directory-filters">
-        <Field label={t('Поиск по справочнику')}>
-          <input
-            type="search"
-            value={query}
-            placeholder={tab === 'users' ? t('Имя, почта или группа') : t('Название или имя')}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(0);
-            }}
-          />
-        </Field>
-        {tab === 'users' && (
-          <>
-            <Field label={t('Роль пользователя')}>
-              <select
-                value={role}
-                onChange={(event) => {
-                  setRole(event.target.value);
-                  setGroup('');
+      <div className="control-panel">
+        <div className="control-grid">
+          <Field label={t('Поиск по справочнику')}>
+            <input
+              type="search"
+              value={query}
+              placeholder={tab === 'users' ? t('Имя, почта или группа') : t('Название или имя')}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(0);
+              }}
+            />
+          </Field>
+          {tab === 'users' && (
+            <>
+              <Field label={t('Роль пользователя')}>
+                <select
+                  value={role}
+                  onChange={(event) => {
+                    setRole(event.target.value);
+                    setGroup('');
+                    setTeacherSubject('');
+                    setPage(0);
+                  }}
+                >
+                  <option value="">{t('Все роли')}</option>
+                  {Object.entries(roles).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {t(label)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <SearchSelect
+                resetKey={filterResetKey}
+                label={t('Учебная группа')}
+                options={data.groups}
+                value={group}
+                placeholder={t('Все группы')}
+                onChange={(value) => {
+                  setGroup(value);
+                  setRole(value ? 'student' : role);
                   setTeacherSubject('');
                   setPage(0);
                 }}
+              />
+              {role === 'teacher' && (
+                <SearchSelect
+                  resetKey={filterResetKey}
+                  label={t('Предмет')}
+                  options={data.subjects}
+                  value={teacherSubject}
+                  placeholder={labels.allSubjects}
+                  onChange={(value) => {
+                    setTeacherSubject(value);
+                    setPage(0);
+                  }}
+                />
+              )}
+            </>
+          )}
+          {tab === 'groups' && (
+            <Field label={t('Курс')}>
+              <select
+                value={course}
+                onChange={(event) => {
+                  setCourse(event.target.value);
+                  setPage(0);
+                }}
               >
-                <option value="">{t('Все роли')}</option>
-                {Object.entries(roles).map(([value, label]) => (
+                <option value="">{labels.allCourses}</option>
+                {courses.map((value) => (
                   <option key={value} value={value}>
-                    {t(label)}
+                    {value}
                   </option>
                 ))}
               </select>
             </Field>
-            <SearchSelect
-              label={t('Учебная группа')}
-              options={data.groups}
-              value={group}
-              placeholder={t('Все группы')}
-              onChange={(value) => {
-                setGroup(value);
-                setRole(value ? 'student' : role);
-                setTeacherSubject('');
-                setPage(0);
-              }}
-            />
-            {role === 'teacher' && (
-              <SearchSelect
-                label={t('Предмет')}
-                options={data.subjects}
-                value={teacherSubject}
-                placeholder={labels.allSubjects}
-                onChange={(value) => {
-                  setTeacherSubject(value);
-                  setPage(0);
-                }}
-              />
-            )}
-          </>
-        )}
-        {tab === 'groups' && (
-          <Field label={t('Курс')}>
-            <select
-              value={course}
-              onChange={(event) => {
-                setCourse(event.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="">{labels.allCourses}</option>
-              {courses.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        <button
-          type="button"
-          className="button"
-          onClick={() => {
-            setQuery('');
-            setRole('');
-            setGroup('');
-            setTeacherSubject('');
-            setCourse('');
-            setPage(0);
-          }}
-        >
-          {labels.reset}
-        </button>
+          )}
+        </div>
+        <div className="control-actions">
+          <p className="control-status" role="status">
+            {labels.found}: {count}
+          </p>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              setQuery('');
+              setRole('');
+              setGroup('');
+              setTeacherSubject('');
+              setCourse('');
+              setPage(0);
+              setFilterResetKey((key) => key + 1);
+            }}
+          >
+            {labels.reset}
+          </button>
+        </div>
       </div>
-      <p className="muted" role="status">
-        {labels.found}: {count}
-      </p>
       {!count ? (
         <EmptyState
           title={data[tab].length ? t('Ничего не найдено') : t('Пока пусто')}

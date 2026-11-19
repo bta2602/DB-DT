@@ -43,3 +43,13 @@ test('available selections survive restoration and disappear when access changes
   );
   assert.deepEqual(normalizeTaskFilters(saved, []), defaultTaskFilters);
 });
+
+test('stored laboratory and independent work filters follow the SRSP category', () => {
+  for (const type of ['Лабораторная работа', 'Самостоятельная работа']) {
+    const saved = { ...defaultTaskFilters, type };
+    assert.equal(
+      normalizeTaskFilters(saved, [{ subjectId: 'subject', type: 'srsp' }]).type,
+      'srsp',
+    );
+  }
+});

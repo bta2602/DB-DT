@@ -11,8 +11,9 @@
   text-align: start;
   cursor: pointer;
 }
-.sort-heading span {
-  flex-shrink: 0;
+.sort-heading .icon.sm {
+  width: 14px;
+  height: 14px;
 }
 .sort-heading:hover {
   color: var(--green);

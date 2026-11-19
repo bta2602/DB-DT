@@ -29,10 +29,6 @@
   width: 39px;
   height: 41px;
 }
-.teacher-stat:nth-child(2) .stat-icon {
-  background: var(--amber-bg);
-  color: var(--amber);
-}
 .teacher-stat strong {
   font-size: 26px;
   line-height: 1.1;
@@ -507,7 +503,6 @@
   width: 35px;
   height: 35px;
   margin-bottom: 17px;
-  color: #9bab90;
 }
 .preview-empty strong {
   display: block;

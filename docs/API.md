@@ -3,8 +3,8 @@
 API находится на том же адресе, что и сайт. Типы ответов описаны
 в `lib/studyhub/api-contract.ts`, обработчики — в `app/api/`.
 Сайт работает на Node.js 24.x. При заданном `DATABASE_URL` API использует
-PostgreSQL в Neon; локально при пустом значении — SQLite. На Vercel
-`DATABASE_URL` обязателен. Контракт запросов и проверка прав одинаковы для обеих баз.
+PostgreSQL в Neon. При пустом значении сервер использует SQLite.
+Контракт запросов и проверка прав одинаковы для обеих баз.
 
 Новые учебные правила требуют миграции `academic_rules_v1` до запуска этой версии
 с PostgreSQL. Порядок подготовки базы и границы выполненной части описаны
@@ -27,14 +27,19 @@ PostgreSQL в Neon; локально при пустом значении — SQ
 `Content-Type: application/json`. Для файлов используется `FormData`;
 Content-Type с границей multipart выставляет браузер.
 
-| Метод и путь            | Назначение / тело                                               |
-| ----------------------- | --------------------------------------------------------------- |
-| POST /api/auth/register | `name, email, password, passwordConfirmation`; создаёт студента |
-| POST /api/auth/login    | `email, password`                                               |
-| POST /api/auth/logout   | Пустой объект                                                   |
-| POST /api/auth/demo     | `role: student / teacher / admin`; только в деморежиме          |
-| GET /api/bootstrap      | Все доступные этой роли учебные массивы                         |
-| PATCH /api/profile      | `name, version`                                                 |
+| Метод и путь            | Назначение / тело                                                           |
+| ----------------------- | --------------------------------------------------------------------------- |
+| POST /api/auth/register | `familyName, givenName, patronymic?, email, password, passwordConfirmation` |
+| POST /api/auth/login    | `email, password`                                                           |
+| POST /api/auth/logout   | Пустой объект                                                               |
+| POST /api/auth/demo     | `role: student / teacher / admin`; только в деморежиме                      |
+| GET /api/bootstrap      | Все доступные этой роли учебные массивы                                     |
+| PATCH /api/profile      | `familyName, givenName, patronymic?, version`                               |
+
+Фамилия `familyName` и имя `givenName` обязательны. Отчество `patronymic` можно
+оставить пустым. Регистрация, профиль и управление пользователями по-прежнему
+принимают от старых клиентов ФИО в поле `name`.
+Объект пользователя в ответе содержит `name` и отдельные части ФИО.
 
 Пароль регистрации — от 12 до 128 символов. Назначить себе роль преподавателя
 через регистрацию нельзя. Демо-вход выбирает фиксированный аккаунт и обновляет
@@ -44,8 +49,8 @@ Content-Type с границей multipart выставляет браузер.
 
 | Метод и путь                  | Поля                                                                         |
 | ----------------------------- | ---------------------------------------------------------------------------- |
-| POST /api/users               | `name, email, role, groupId, password`                                       |
-| PATCH /api/users/:id          | `name, email, role, groupId, version`                                        |
+| POST /api/users               | `familyName, givenName, patronymic?, email, role, groupId, password`         |
+| PATCH /api/users/:id          | `familyName, givenName, patronymic?, email, role, groupId, version`          |
 | POST /api/groups              | `name, course, curatorId`; дополнительно `program, intakeYear, language`     |
 | PATCH /api/groups/:id         | Поля группы и `version`                                                      |
 | POST /api/subjects            | `name`                                                                       |

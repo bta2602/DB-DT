@@ -181,13 +181,13 @@
   gap: 8px;
 }
 .role-control.in-account .role-control-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-height: 44px;
   text-align: left;
   padding: 12px 14px;
-}
-.role-control.in-account .role-control-button[aria-pressed='true']::after {
-  content: '✓';
-  float: right;
 }
 .account-actions {
   margin-top: 22px;

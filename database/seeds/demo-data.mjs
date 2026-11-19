@@ -23,7 +23,7 @@ export function createDemoData(now = new Date()) {
   const users = [
     {
       id: profiles.adminId,
-      name: 'Администратор демо',
+      name: 'Ерлан Бекмуратов',
       email: 'admin@example.test',
       role: 'admin',
       groupId: null,

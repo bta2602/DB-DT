@@ -7,6 +7,7 @@ import { useId, useState } from 'react';
 import type { Role } from '@/lib/studyhub/api-contract';
 import { roles } from '@/lib/studyhub/client-utils';
 import { useStudyHub } from './context';
+import { Icon } from './shared';
 
 const demoRoles: Role[] = ['student', 'teacher', 'admin'];
 
@@ -62,7 +63,8 @@ export function DemoRoleControl({
             disabled={disabled || !ready || switchingRole}
             onClick={() => void chooseRole(role)}
           >
-            {t(roles[role])}
+            <span>{t(roles[role])}</span>
+            {inAccount && user?.role === role && <Icon name="check" className="sm" />}
           </button>
         ))}
       </div>

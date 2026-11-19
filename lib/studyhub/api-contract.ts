@@ -21,6 +21,9 @@ export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 export type User = {
   id: Id;
   name: string;
+  familyName?: string | null;
+  givenName?: string | null;
+  patronymic?: string | null;
   email: string;
   role: Role;
   groupId: Id | null;
@@ -211,8 +214,10 @@ export type DemoLoginInput = { role: Role };
 export type AnnouncementInput = Pick<Announcement, 'title' | 'body'>;
 
 /** Самостоятельная регистрация создаёт только студента без назначенной группы. */
-export type RegisterInput = {
-  name: string;
+export type PersonalNameInput =
+  { familyName: string; givenName: string; patronymic?: string | null } | { name: string };
+
+export type RegisterInput = PersonalNameInput & {
   email: string;
   password: string;
   passwordConfirmation: string;
@@ -271,7 +276,7 @@ export type RoomAvailability = {
   rooms: { roomId: Id; available: boolean; capacityOk: boolean; busyUntil: string | null }[];
 };
 
-export type UserInput = Omit<User, 'id' | 'version'>;
+export type UserInput = PersonalNameInput & Pick<User, 'email' | 'role' | 'groupId'>;
 
 /** Пароль задаётся администратором только при создании аккаунта. */
 export type CreateUserInput = UserInput & { password: string };
@@ -280,8 +285,7 @@ export type GroupInput = Omit<Group, 'id' | 'version'>;
 
 export type RoomInput = Omit<Room, 'id' | 'version'>;
 
-export type ProfileInput = {
-  name: string;
+export type ProfileInput = PersonalNameInput & {
   version: number;
 };
 

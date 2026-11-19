@@ -42,16 +42,12 @@ export function LessonTypeButtons({
 }) {
   const { t } = useI18n();
   return (
-    <div
-      role="group"
-      aria-label={label}
-      style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}
-    >
+    <div role="group" aria-label={label} className="tabs lesson-kind-tabs">
       {(['lecture', 'practice', 'srsp'] as const).map((kind) => (
         <button
           key={kind}
           type="button"
-          className={`button ${value === kind ? 'primary' : ''}`}
+          className={value === kind ? 'active' : ''}
           aria-pressed={value === kind}
           disabled={disabled}
           onClick={() => onChange(kind)}
@@ -292,6 +288,49 @@ export function LessonEditor({
     return item ? { ...item, name: `${item.name} (${labels.legacy})` } : undefined;
   };
 
+  const timingFields = (
+    <div className="control-grid">
+      <Field label={t('Дата')}>
+        <input
+          type="date"
+          required={!selfStudy}
+          disabled={selfStudy}
+          value={selfStudy ? practice?.date || '' : date}
+          onChange={(event) => {
+            setDate(event.target.value);
+            setRoomId('');
+          }}
+        />
+      </Field>
+      <Field label={t('Время занятия')}>
+        <select
+          required={!selfStudy}
+          disabled={selfStudy}
+          value={
+            selfStudy
+              ? practice?.slotId ||
+                (practice?.startsAt && practice.endsAt
+                  ? slotForInterval(practice.startsAt, practice.endsAt)
+                  : '') ||
+                ''
+              : slotId
+          }
+          onChange={(event) => {
+            setSlotId(event.target.value);
+            setRoomId('');
+          }}
+        >
+          <option value="">{selfStudy ? '—' : t('Выберите пару')}</option>
+          {lessonSlots.map((slot) => (
+            <option key={slot.id} value={slot.id}>
+              {slot.start}–{slot.end}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </div>
+  );
+
   return (
     <Modal
       title={lesson ? t('Изменить занятие') : t('Новое занятие')}
@@ -299,123 +338,120 @@ export function LessonEditor({
       closeDisabled={busy}
     >
       <form onSubmit={save} aria-busy={busy}>
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+        <fieldset disabled={busy} className="lesson-form">
           <LessonTypeButtons
             value={kind}
             onChange={changeKind}
             label={labels.type}
             disabled={busy}
           />
-          <div className="form-row">
-            <SearchSelect
-              label={t('Группа')}
-              options={groups}
-              value={groupId}
-              selectedOption={data.groups.find((item) => item.id === groupId)}
-              required
-              placeholder={labels.choose}
-              onChange={(value) => {
-                setGroupId(value);
-                resetSubject();
-              }}
-            >
-              <div className="mini-filters">
-                <label>
-                  {ui.program}
-                  <select value={program} onChange={(event) => setProgram(event.target.value)}>
-                    <option value="">{ui.all}</option>
-                    {[...new Set(data.groups.map((group) => group.program).filter(Boolean))].map(
-                      (value) => (
-                        <option key={value!} value={value!}>
-                          {value === 'IS' ? 'ИС' : value === 'VTIPO' ? 'ВТиПО' : value}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </label>
-                <label>
-                  {ui.year}
-                  <select
-                    value={intakeYear}
-                    onChange={(event) => setIntakeYear(event.target.value)}
-                  >
-                    <option value="">{ui.all}</option>
-                    {[...new Set(data.groups.map((group) => group.intakeYear).filter(Boolean))]
-                      .sort()
-                      .map((year) => (
-                        <option key={year!} value={year!}>
-                          {year}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  {ui.language}
-                  <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-                    <option value="">{ui.all}</option>
-                    <option value="kk">Қазақша</option>
-                    <option value="ru">Русский</option>
-                  </select>
-                </label>
-              </div>
-              {(program || intakeYear || language) && (
-                <button
-                  type="button"
-                  className="text-link"
-                  onClick={() => {
-                    setProgram('');
-                    setIntakeYear('');
-                    setLanguage('');
-                  }}
-                >
-                  {ui.reset}
-                </button>
-              )}
-            </SearchSelect>
-            <Field label={t('Дата')}>
-              <input
-                type="date"
-                required={!selfStudy}
-                disabled={selfStudy}
-                value={selfStudy ? practice?.date || '' : date}
-                onChange={(event) => {
-                  setDate(event.target.value);
-                  setRoomId('');
+          <SearchSelect
+            label={t('Группа')}
+            options={groups}
+            value={groupId}
+            selectedOption={data.groups.find((item) => item.id === groupId)}
+            required
+            placeholder={labels.choose}
+            onChange={(value) => {
+              setGroupId(value);
+              resetSubject();
+            }}
+          >
+            <div className="mini-filters">
+              <label>
+                {ui.program}
+                <select value={program} onChange={(event) => setProgram(event.target.value)}>
+                  <option value="">{ui.all}</option>
+                  {[...new Set(data.groups.map((group) => group.program).filter(Boolean))].map(
+                    (value) => (
+                      <option key={value!} value={value!}>
+                        {value === 'IS' ? 'ИС' : value === 'VTIPO' ? 'ВТиПО' : value}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label>
+                {ui.year}
+                <select value={intakeYear} onChange={(event) => setIntakeYear(event.target.value)}>
+                  <option value="">{ui.all}</option>
+                  {[...new Set(data.groups.map((group) => group.intakeYear).filter(Boolean))]
+                    .sort()
+                    .map((year) => (
+                      <option key={year!} value={year!}>
+                        {year}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                {ui.language}
+                <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                  <option value="">{ui.all}</option>
+                  <option value="kk">Қазақша</option>
+                  <option value="ru">Русский</option>
+                </select>
+              </label>
+            </div>
+            {(program || intakeYear || language) && (
+              <button
+                type="button"
+                className="text-link"
+                onClick={() => {
+                  setProgram('');
+                  setIntakeYear('');
+                  setLanguage('');
+                }}
+              >
+                {ui.reset}
+              </button>
+            )}
+          </SearchSelect>
+          {!selfStudy && (
+            <>
+              {timingFields}
+              <p className="small muted">{labels.break}</p>
+            </>
+          )}
+          <div className="control-grid">
+            <div className="lesson-field-group">
+              <SearchSelect
+                label={t('Предмет')}
+                options={subjects}
+                value={subjectId}
+                required
+                disabled={!groupId}
+                selectedOption={previous(data.subjects, lesson?.subjectId)}
+                placeholder={labels.choose}
+                onChange={(value) => {
+                  setSubjectId(value);
+                  setTeacherId('');
+                  setPracticeId('');
                 }}
               />
-            </Field>
+              {groupId && !subjects.length && (
+                <p className="small muted">
+                  {selfStudy ? labels.noPractices : labels.noCurriculum}
+                </p>
+              )}
+            </div>
+            <div className="lesson-field-group">
+              <SearchSelect
+                label={t('Преподаватель')}
+                options={teachers}
+                value={teacherId}
+                required
+                disabled={!subjectId}
+                selectedOption={previous(data.users, lesson?.teacherId)}
+                placeholder={labels.choose}
+                onChange={(value) => {
+                  setTeacherId(value);
+                  setPracticeId('');
+                }}
+              />
+              {subjectId && !teachers.length && <p className="small muted">{labels.noTeachers}</p>}
+            </div>
           </div>
-          <SearchSelect
-            label={t('Предмет')}
-            options={subjects}
-            value={subjectId}
-            required
-            disabled={!groupId}
-            selectedOption={previous(data.subjects, lesson?.subjectId)}
-            placeholder={labels.choose}
-            onChange={(value) => {
-              setSubjectId(value);
-              setTeacherId('');
-              setPracticeId('');
-            }}
-          />
-          {groupId && !subjects.length && (
-            <p className="small muted">{selfStudy ? labels.noPractices : labels.noCurriculum}</p>
-          )}
-          <SearchSelect
-            label={t('Преподаватель')}
-            options={teachers}
-            value={teacherId}
-            required
-            disabled={!subjectId}
-            selectedOption={previous(data.users, lesson?.teacherId)}
-            placeholder={labels.choose}
-            onChange={(value) => {
-              setTeacherId(value);
-              setPracticeId('');
-            }}
-          />
-          {subjectId && !teachers.length && <p className="small muted">{labels.noTeachers}</p>}
           {selfStudy && (
             <>
               <SearchSelect
@@ -438,33 +474,7 @@ export function LessonEditor({
               <p className="small muted">{ui.inherited}</p>
             </>
           )}
-          <Field label={t('Время занятия')}>
-            <select
-              required={!selfStudy}
-              disabled={selfStudy}
-              value={
-                selfStudy
-                  ? practice?.slotId ||
-                    (practice?.startsAt && practice.endsAt
-                      ? slotForInterval(practice.startsAt, practice.endsAt)
-                      : '') ||
-                    ''
-                  : slotId
-              }
-              onChange={(event) => {
-                setSlotId(event.target.value);
-                setRoomId('');
-              }}
-            >
-              <option value="">{selfStudy ? '—' : t('Выберите пару')}</option>
-              {lessonSlots.map((slot) => (
-                <option key={slot.id} value={slot.id}>
-                  {slot.start}–{slot.end}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {!selfStudy && <p className="small muted">{labels.break}</p>}
+          {selfStudy && timingFields}
           {selfStudy ? (
             <Field label={t('Аудитория')}>
               <input
@@ -572,17 +582,19 @@ export function LessonEditor({
             <section className="lesson-hide-confirm" aria-label={ui.hideTitle}>
               <h3>{ui.hideTitle}</h3>
               <p>{ui.hideHint}</p>
-              <button type="button" className="button danger" onClick={() => void hideLesson()}>
-                {ui.hide}
-              </button>{' '}
-              <button type="button" className="button" onClick={() => setConfirmHide(false)}>
-                {ui.cancel}
-              </button>
+              <div className="control-group">
+                <button type="button" className="button" onClick={() => setConfirmHide(false)}>
+                  {ui.cancel}
+                </button>
+                <button type="button" className="button danger" onClick={() => void hideLesson()}>
+                  {ui.hide}
+                </button>
+              </div>
             </section>
           )}
           <div className="form-actions">
             {lesson && (
-              <>
+              <div className="control-group">
                 <button
                   type="button"
                   className="button danger"
@@ -592,7 +604,7 @@ export function LessonEditor({
                 </button>
                 <button
                   type="button"
-                  className="button danger"
+                  className={lesson.status === 'cancelled' ? 'button' : 'button danger'}
                   onClick={() =>
                     void persist({
                       status: lesson.status === 'cancelled' ? 'scheduled' : 'cancelled',
@@ -606,14 +618,16 @@ export function LessonEditor({
                 <button type="button" className="button" onClick={() => void persist({ note })}>
                   {labels.saveNote}
                 </button>
-              </>
+              </div>
             )}
-            <button type="button" className="button" onClick={onClose}>
-              {t('Закрыть')}
-            </button>
-            <button type="submit" className="button primary" disabled={!validSelection || busy}>
-              {busy ? t('Сохраняем…') : t('Сохранить')}
-            </button>
+            <div className="control-group">
+              <button type="button" className="button" onClick={onClose}>
+                {t('Закрыть')}
+              </button>
+              <button type="submit" className="button primary" disabled={!validSelection || busy}>
+                {busy ? t('Сохраняем…') : t('Сохранить')}
+              </button>
+            </div>
           </div>
         </fieldset>
       </form>

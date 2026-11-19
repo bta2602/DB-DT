@@ -1,6 +1,7 @@
 import { randomBytes, scrypt } from 'node:crypto';
 import { promisify } from 'node:util';
 import { ACADEMIC_SLOTS, createAcademicPlan } from './academic-plan.mjs';
+import { splitLegacyName } from '../../lib/studyhub/user-names.mjs';
 
 const deriveKey = promisify(scrypt);
 const DAY = 86400000;
@@ -57,6 +58,20 @@ const kazakhFamilies = [
   ['Садықова', 'Садықов', 'Асхатқызы', 'Асхатұлы'],
   ['Төлеубаева', 'Төлеубаев', 'Нұрланқызы', 'Нұрланұлы'],
   ['Қайратова', 'Қайратов', 'Даниярқызы', 'Даниярұлы'],
+  ['Сәрсенбаева', 'Сәрсенбаев', 'Мәдиқызы', 'Мәдиұлы'],
+  ['Жұмағалиева', 'Жұмағалиев', 'Берікқызы', 'Берікұлы'],
+  ['Тілеубергенова', 'Тілеубергенов', 'Қайратқызы', 'Қайратұлы'],
+  ['Бейсенова', 'Бейсенов', 'Еркінқызы', 'Еркінұлы'],
+  ['Сейдахметова', 'Сейдахметов', 'Мейрамқызы', 'Мейрамұлы'],
+  ['Кәрімова', 'Кәрімов', 'Рахатқызы', 'Рахатұлы'],
+  ['Досжанова', 'Досжанов', 'Елдосқызы', 'Елдосұлы'],
+  ['Жақыпова', 'Жақыпов', 'Айдынқызы', 'Айдынұлы'],
+  ['Смағұлова', 'Смағұлов', 'Алмасқызы', 'Алмасұлы'],
+  ['Бекенова', 'Бекенов', 'Сәкенқызы', 'Сәкенұлы'],
+  ['Тәшенова', 'Тәшенов', 'Қуанышқызы', 'Қуанышұлы'],
+  ['Мұстафина', 'Мұстафин', 'Асқарқызы', 'Асқарұлы'],
+  ['Қожабаева', 'Қожабаев', 'Ермекқызы', 'Ермекұлы'],
+  ['Иманова', 'Иманов', 'Қанатбекқызы', 'Қанатбекұлы'],
 ];
 
 const russianFirstNames = [
@@ -90,17 +105,34 @@ const russianFamilies = [
   ['Морозова', 'Морозов', 'Николаевна', 'Николаевич'],
   ['Орлова', 'Орлов', 'Павловна', 'Павлович'],
   ['Фёдорова', 'Фёдоров', 'Игоревна', 'Игоревич'],
+  ['Романова', 'Романов', 'Романовна', 'Романович'],
+  ['Крылова', 'Крылов', 'Олеговна', 'Олегович'],
+  ['Мельникова', 'Мельников', 'Антоновна', 'Антонович'],
+  ['Захарова', 'Захаров', 'Артёмовна', 'Артёмович'],
+  ['Калинина', 'Калинин', 'Валерьевна', 'Валерьевич'],
+  ['Громова', 'Громов', 'Евгеньевна', 'Евгеньевич'],
+  ['Виноградова', 'Виноградов', 'Владимировна', 'Владимирович'],
+  ['Соловьёва', 'Соловьёв', 'Григорьевна', 'Григорьевич'],
+  ['Котова', 'Котов', 'Константиновна', 'Константинович'],
+  ['Кондратьева', 'Кондратьев', 'Денисовна', 'Денисович'],
+  ['Бирюкова', 'Бирюков', 'Львовна', 'Львович'],
+  ['Шестакова', 'Шестаков', 'Георгиевна', 'Георгиевич'],
+  ['Рыбакова', 'Рыбаков', 'Борисовна', 'Борисович'],
+  ['Астахова', 'Астахов', 'Вадимовна', 'Вадимович'],
 ];
 
-// Only new fictional accounts receive these names; existing names are never rewritten.
+// Used for fictional seed accounts and the optional student-name migration.
 export function academicStudentName(index, language) {
   if (!Number.isInteger(index) || index < 0 || !['kk', 'ru'].includes(language))
     throw new RangeError('Укажите номер студента и язык группы kk или ru.');
   const firstNames = language === 'kk' ? kazakhFirstNames : russianFirstNames;
   const families = language === 'kk' ? kazakhFamilies : russianFamilies;
   const sex = index % 2;
-  const first = firstNames[Math.floor(index / 2) % firstNames.length][sex];
-  const family = families[Math.floor(index / (firstNames.length * 2)) % families.length];
+  const pairIndex = Math.floor(index / 2);
+  const firstIndex = pairIndex % firstNames.length;
+  const first = firstNames[firstIndex][sex];
+  const family =
+    families[(Math.floor(pairIndex / firstNames.length) + firstIndex * 5) % families.length];
   return `${first} ${family[sex + 2]} ${family[sex]}`;
 }
 
@@ -227,11 +259,25 @@ export async function seedAcademicData(
       const salt = randomBytes(16);
       const hash = await deriveKey(password, salt, 64, SCRYPT);
       const passwordHash = `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString('base64url')}$${hash.toString('base64url')}`;
+      const { familyName, givenName, patronymic } = splitLegacyName(name);
       await tx
         .prepare(
-          'INSERT INTO auth_users(id,email,name,password_hash,role,created_at,is_demo,group_id) VALUES (?,?,?,?,?,?,?,?)',
+          `INSERT INTO auth_users(id,email,name,password_hash,role,created_at,is_demo,group_id,
+            family_name,given_name,patronymic) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         )
-        .run(id, email, name, passwordHash, role, Date.now(), 1, groupId);
+        .run(
+          id,
+          email,
+          name,
+          passwordHash,
+          role,
+          Date.now(),
+          1,
+          groupId,
+          familyName,
+          givenName,
+          patronymic,
+        );
       const account = { id, email, name, role, group_id: groupId };
       accounts.push({ id, email, name, role, password });
       entities[role].push(account);

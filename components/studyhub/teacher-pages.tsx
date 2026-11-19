@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type {
   Assignment,
   Grade,
@@ -46,13 +46,22 @@ import { useI18n } from './preferences';
 import { useTeacherDrafts, type ReviewDraft } from './teacher-context';
 import { AnnouncementsPanel, MaterialsPanel } from './publication-panels';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading, Person } from './shared';
-import { useBrowserStorage } from './use-browser-storage';
+import { useBrowserStorage, type BrowserStorageStatus } from './use-browser-storage';
 import { StorageFeedback } from './storage-feedback';
 import { SearchSelect } from './search-select';
 import { lessonToolsLabels } from '@/lib/studyhub/lesson-tools-labels';
 import { nextSort, sortRows, type SortState } from '@/lib/studyhub/table-sort';
 import { SortHeading } from './sort-heading';
 import { reviewedJournalTarget, reviewJournalHref } from '@/lib/studyhub/review-journal';
+import { assessmentKind, recognizedAssessmentKind } from '@/lib/studyhub/assessment-kind.mjs';
+import {
+  journalColumns,
+  journalDate,
+  journalModeLabels,
+  journalModes,
+  journalStudentName,
+  type JournalMode,
+} from '@/lib/studyhub/journal-columns';
 
 const workLabels = {
   submitted: 'На проверке',
@@ -125,7 +134,11 @@ function useTeacherTaskFilters(
     entityId === 'overview'
       ? scope.lessons.map((item) => item.kind)
       : scope.assignments.map((item) => item.type);
-  const type = available.includes(storage.value.type) ? storage.value.type : '';
+  const savedType =
+    entityId === 'overview' || !storage.value.type
+      ? storage.value.type
+      : recognizedAssessmentKind(storage.value.type) || '';
+  const type = available.includes(savedType) ? savedType : '';
   const assignmentId = scope.assignments.some(
     (assignment) =>
       assignment.id === storage.value.assignmentId &&
@@ -148,7 +161,44 @@ function useTeacherTaskFilters(
   };
 }
 
+function TeacherFilterPanel({
+  children,
+  className = '',
+  ready,
+  status,
+  count,
+  onReset,
+}: {
+  children: ReactNode;
+  className?: string;
+  ready: boolean;
+  status: BrowserStorageStatus;
+  count: number;
+  onReset: () => void;
+}) {
+  const { locale } = useI18n();
+  const labels = teacherUi[locale];
+  const title = { ru: 'Фильтры', kk: 'Сүзгілер', en: 'Filters' }[locale];
+  return (
+    <section className={`control-panel ${className}`.trim()}>
+      <fieldset className="control-grid" aria-label={title} disabled={!ready}>
+        {children}
+      </fieldset>
+      <div className="control-actions">
+        <p className="control-status" role="status">
+          {labels.results}: {count}
+        </p>
+        <button type="button" className="button small" disabled={!ready} onClick={onReset}>
+          {labels.reset}
+        </button>
+      </div>
+      <StorageFeedback status={status} />
+    </section>
+  );
+}
+
 function TeacherFilterFields({
+  afterSubject,
   scope,
   filters,
   update,
@@ -156,6 +206,7 @@ function TeacherFilterFields({
   resetKey,
   taskFields = true,
 }: {
+  afterSubject?: ReactNode;
   scope: TeacherScope;
   filters: TeacherTaskFilters;
   update: (next: Partial<TeacherTaskFilters>) => void;
@@ -191,6 +242,7 @@ function TeacherFilterFields({
         placeholder={labels.allSubjects}
         onChange={(value) => update({ subjectId: value, type: '', assignmentId: '' })}
       />
+      {afterSubject}
       <Field label={t('Тип')}>
         <select
           value={filters.type}
@@ -346,7 +398,7 @@ export function TeacherToday() {
     <>
       <PageHeading
         title={t('Добрый день, {value0}.', {
-          value0: String(user?.name.split(' ')[0] || t('преподаватель')),
+          value0: user?.givenName || user?.name.split(' ')[0] || t('преподаватель'),
         })}
         description={t('{value0} · занятия, журнал и работы студентов.', {
           value0: String(formatDate(new Date(now).toISOString(), locale)),
@@ -357,29 +409,21 @@ export function TeacherToday() {
           </Link>
         }
       />
-      <div className="teacher-toolbar">
-        <fieldset
-          className="teacher-filters"
-          disabled={!storage.ready}
-          style={{ border: 0, padding: 0, minWidth: 0 }}
-        >
-          <TeacherFilterFields
-            scope={scope}
-            filters={filters}
-            resetKey={storage.resetKey}
-            update={storage.update}
-            kinds={scope.lessons.map((lesson) => lesson.kind)}
-            taskFields={false}
-          />
-          <button type="button" className="button small" onClick={storage.reset}>
-            {teacherUi[locale].reset}
-          </button>
-        </fieldset>
-        <p aria-live="polite">
-          {teacherUi[locale].results}: {lessons.length}
-        </p>
-      </div>
-      <StorageFeedback status={storage.status} />
+      <TeacherFilterPanel
+        ready={storage.ready}
+        status={storage.status}
+        count={lessons.length}
+        onReset={storage.reset}
+      >
+        <TeacherFilterFields
+          scope={scope}
+          filters={filters}
+          resetKey={storage.resetKey}
+          update={storage.update}
+          kinds={scope.lessons.map((lesson) => lesson.kind)}
+          taskFields={false}
+        />
+      </TeacherFilterPanel>
       <div className="teacher-stats">
         {[
           ['calendar', lessons.length, t('Занятий сегодня')],
@@ -545,10 +589,10 @@ function GradeEditor({
       onClose={onClose}
       closeDisabled={busy}
     >
-      <p className="grade-editor-student">{student.name}</p>
+      <p className="grade-editor-student">{journalStudentName(student)}</p>
       <p className="small muted mb">
-        {formatDate(lesson.startsAt, locale)} · {formatTime(lesson.startsAt)} ·{' '}
-        {t(lessonKindLabel(lesson.kind))}
+        {journalDate(lesson.startsAt || lesson.date)} · {formatTime(lesson.startsAt)} ·{' '}
+        {academicTypeLabel(assessmentKind(lesson.kind), locale)}
       </p>
       <form
         onSubmit={(event) => {
@@ -644,6 +688,8 @@ function JournalContent({
   const highlightRef = useRef<HTMLTableCellElement>(null);
   const [highlight, setHighlight] = useState(Boolean(linkedRecord));
   const [sort, setSort] = useState<SortState>({ key: 'name', direction: 'asc' });
+  const [mode, setMode] = useState<JournalMode>('all');
+  const modeLabels = journalModeLabels[locale];
   const ui = lessonToolsLabels[locale];
   useEffect(() => {
     if (!highlightRef.current) return;
@@ -660,6 +706,7 @@ function JournalContent({
     validate: isJournalFilters,
   });
   const [fromLink, setFromLink] = useState(Boolean(linkedTarget));
+  const [resetKey, setResetKey] = useState(0);
   const selectedGroup = fromLink ? linkedTarget?.groupId || '' : storage.value.groupId;
   const groupId = scope.groups.some((group) => group.id === selectedGroup)
     ? selectedGroup
@@ -679,33 +726,24 @@ function JournalContent({
   const filteredStudents = students.filter(
     (student) =>
       (!fromLink || !linkedRecord || student.id === linkedRecord.student.id) &&
-      student.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
+      journalStudentName(student)
+        .toLocaleLowerCase(locale)
+        .includes(query.trim().toLocaleLowerCase(locale)),
   );
-  const columns = [
-    ...scope.historyLessons
-      .filter(
-        (item) =>
-          item.kind !== 'srsp' &&
-          item.groupId === groupId &&
-          item.subjectId === subjectId &&
-          ((!item.archivedAt && item.status !== 'cancelled') ||
-            data.grades.some((grade) => grade.lessonId === item.id)),
-      )
-      .map((item) => ({
-        kind: 'lesson' as const,
-        id: item.id,
-        date: item.startsAt || item.date,
-        label: lessonKindLabel(item.kind),
-      })),
-    ...scope.assignments
-      .filter((item) => item.groupId === groupId && item.subjectId === subjectId)
-      .map((item) => ({
-        kind: 'assignment' as const,
-        id: item.id,
-        date: item.dueAt,
-        label: item.title,
-      })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  const inSubject = (item: { groupId: string; subjectId: string }) =>
+    item.groupId === groupId && item.subjectId === subjectId;
+  const columns = journalColumns(
+    scope.historyLessons.filter(inSubject),
+    scope.assignments.filter(inSubject),
+    data.grades,
+    mode,
+  ).map((column) => {
+    const category = academicTypeLabel(column.category, locale);
+    return {
+      ...column,
+      label: column.title ? `${category} · ${column.title}` : category,
+    };
+  });
   const grades = new Map(
     data.grades.map((grade) => [`${grade.lessonId}:${grade.studentId}`, grade]),
   );
@@ -721,7 +759,7 @@ function JournalContent({
     filteredStudents,
     sort,
     (student, key) => {
-      if (key === 'name') return student.name;
+      if (key === 'name') return journalStudentName(student);
       if (key === 'average') return average(columns.map((column) => scoreFor(column, student.id)));
       const column = columns.find((item) => item.kind + ':' + item.id === key);
       return column ? scoreFor(column, student.id) : null;
@@ -740,10 +778,10 @@ function JournalContent({
       [t('Предмет'), title(data.subjects, subjectId)],
       [
         t('Студент'),
-        ...columns.map(
-          (column) =>
-            `${formatDate(column.date, locale)} ${formatTime(column.date)} — ${column.label}`,
-        ),
+        ...columns.map((column) => {
+          const time = column.date.includes('T') ? ` ${formatTime(column.date)}` : '';
+          return `${journalDate(column.date)}${time} · ${column.label}`;
+        }),
         t('Средний балл'),
       ],
     ];
@@ -758,7 +796,7 @@ function JournalContent({
       const mean = average(columns.map((column) => scoreFor(column, student.id)));
 
       rows.push([
-        student.name,
+        journalStudentName(student),
         ...marks,
         mean === null
           ? '—'
@@ -795,7 +833,12 @@ function JournalContent({
             {ui.backReview}
           </Link>
           {fromLink && (
-            <button type="button" className="button" onClick={() => setFromLink(false)}>
+            <button
+              type="button"
+              className="button"
+              disabled={!storage.ready}
+              onClick={() => updateFilters({ query: '' })}
+            >
               {ui.showAllStudents}
             </button>
           )}
@@ -809,53 +852,57 @@ function JournalContent({
         />
       ) : (
         <>
-          <div className="teacher-toolbar">
-            <div className="teacher-filters">
-              <SearchSelect
-                label={t('Учебная группа')}
-                value={groupId}
-                options={scope.groups}
-                placeholder={t('Группа')}
-                disabled={!storage.ready}
-                onChange={(value) => updateFilters({ groupId: value, subjectId: '', query: '' })}
-              />
-              <SearchSelect
-                label={t('Предмет')}
-                value={subjectId}
-                options={subjects}
-                placeholder={t('Предмет')}
-                disabled={!storage.ready}
-                onChange={(value) => updateFilters({ subjectId: value })}
-              />
-            </div>
-            <label className="search-field">
-              <Icon name="search" className="sm" />
+          <div className="tabs journal-modes mb" role="group" aria-label={modeLabels.group}>
+            {journalModes.map((value) => (
+              <button
+                type="button"
+                key={value}
+                className={mode === value ? 'active' : ''}
+                aria-pressed={mode === value}
+                onClick={() => {
+                  setMode(value);
+                  setSort({ key: 'name', direction: 'asc' });
+                }}
+              >
+                {modeLabels[value]}
+              </button>
+            ))}
+          </div>
+          <TeacherFilterPanel
+            ready={storage.ready}
+            status={storage.status}
+            count={visibleStudents.length}
+            onReset={() => {
+              setFromLink(false);
+              storage.reset();
+              setResetKey((key) => key + 1);
+            }}
+          >
+            <SearchSelect
+              label={t('Учебная группа')}
+              resetKey={resetKey}
+              value={groupId}
+              options={scope.groups}
+              placeholder={t('Группа')}
+              onChange={(value) => updateFilters({ groupId: value, subjectId: '', query: '' })}
+            />
+            <SearchSelect
+              label={t('Предмет')}
+              resetKey={resetKey}
+              value={subjectId}
+              options={subjects}
+              placeholder={t('Предмет')}
+              onChange={(value) => updateFilters({ subjectId: value })}
+            />
+            <Field label={t('Поиск студента')}>
               <input
-                aria-label={t('Поиск студента')}
-                disabled={!storage.ready}
+                type="search"
                 placeholder={t('Поиск студента…')}
                 value={query}
                 onChange={(event) => updateFilters({ query: event.target.value })}
               />
-            </label>
-          </div>
-          <div className="teacher-toolbar">
-            <button
-              type="button"
-              className="button small"
-              disabled={!storage.ready}
-              onClick={() => {
-                setFromLink(false);
-                storage.reset();
-              }}
-            >
-              {teacherUi[locale].reset}
-            </button>
-            <p aria-live="polite">
-              {teacherUi[locale].results}: {visibleStudents.length}
-            </p>
-          </div>
-          <StorageFeedback status={storage.status} />
+            </Field>
+          </TeacherFilterPanel>
           {!columns.length ? (
             <EmptyState
               title={t('Нет занятий или заданий')}
@@ -888,7 +935,8 @@ function JournalContent({
                       {columns.map((column) => (
                         <SortHeading
                           key={column.kind + column.id}
-                          label={formatDate(column.date, locale) + ' · ' + column.label}
+                          label={journalDate(column.date) + ' · ' + column.label}
+                          detail={column.date + ' · ' + column.label}
                           column={column.kind + ':' + column.id}
                           sort={sort}
                           onSort={(key) => setSort(nextSort(sort, key))}
@@ -908,7 +956,7 @@ function JournalContent({
                       return (
                         <tr key={student.id}>
                           <td>
-                            <Person user={student} />
+                            <Person user={{ ...student, name: journalStudentName(student) }} />
                           </td>
                           {columns.map((column) => {
                             const record = grades.get(`${column.id}:${student.id}`);
@@ -946,7 +994,7 @@ function JournalContent({
                                       className={`grade-cell ${score == null ? 'blank' : score < 50 ? 'low' : ''}`}
                                       href={`/review?work=${encoded(work.id)}`}
                                       aria-label={t('Работа: {name}, {title}', {
-                                        name: student.name,
+                                        name: journalStudentName(student),
                                         title: column.label,
                                       })}
                                     >
@@ -960,16 +1008,13 @@ function JournalContent({
                                     type="button"
                                     className={`grade-cell ${record?.status || 'unmarked'} ${score != null && score < 50 ? 'low' : ''}`}
                                     aria-label={t('Оценка: {name}, {date}, {time}, {title}', {
-                                      name: student.name,
-                                      date: formatDate(column.date, locale),
+                                      name: journalStudentName(student),
+                                      date: journalDate(column.date),
                                       time: formatTime(column.date),
                                       title: column.label,
                                     })}
                                     aria-haspopup="dialog"
-                                    disabled={
-                                      Date.parse(column.date) > now ||
-                                      !scope.lessons.some((lesson) => lesson.id === column.id)
-                                    }
+                                    disabled={!column.editable || Date.parse(column.date) > now}
                                     onClick={() =>
                                       setEditing({ lessonId: column.id, studentId: student.id })
                                     }
@@ -1545,64 +1590,49 @@ function ReviewContent({
           ))}
         </div>
       </div>
-      <div className="teacher-toolbar">
-        <fieldset
-          className="teacher-filters"
-          disabled={!storage.ready}
-          style={{ border: 0, padding: 0, minWidth: 0 }}
-        >
-          <TeacherFilterFields
-            scope={scope}
-            filters={filters}
-            resetKey={storage.resetKey}
-            update={updateFilters}
-            kinds={scope.assignments.map((assignment) => assignment.type)}
-          />
-          <SearchSelect
-            label={t('Задание')}
-            resetKey={storage.resetKey}
-            value={assignmentId}
-            placeholder={t('Все задания')}
-            options={scope.assignments
-              .filter(
-                (assignment) =>
-                  (!groupId || assignment.groupId === groupId) &&
-                  (!filters.subjectId || assignment.subjectId === filters.subjectId) &&
-                  (!filters.type || assignment.type === filters.type),
-              )
-              .map((assignment) => ({ id: assignment.id, name: assignment.title }))}
-            onChange={(value) => updateFilters({ assignmentId: value })}
-          />
-        </fieldset>
-        <div className="search-field">
-          <Icon name="search" className="sm" />
+      <TeacherFilterPanel
+        className="review-filter-panel"
+        ready={storage.ready}
+        status={storage.status}
+        count={rows.length}
+        onReset={() => {
+          setFromLink(false);
+          storage.reset();
+        }}
+      >
+        <Field label={t('Поиск по работам')}>
           <input
             type="search"
-            aria-label={t('Поиск по работам')}
             placeholder={t('Студент или название работы…')}
             value={query}
-            disabled={!storage.ready}
             onChange={(event) => updateFilters({ query: event.target.value })}
           />
-        </div>
-      </div>
-      <div className="teacher-toolbar">
-        <button
-          type="button"
-          className="button small"
-          disabled={!storage.ready}
-          onClick={() => {
-            setFromLink(false);
-            storage.reset();
-          }}
-        >
-          {teacherUi[locale].reset}
-        </button>
-        <p aria-live="polite">
-          {teacherUi[locale].results}: {rows.length}
-        </p>
-      </div>
-      <StorageFeedback status={storage.status} />
+        </Field>
+        <TeacherFilterFields
+          scope={scope}
+          filters={filters}
+          resetKey={storage.resetKey}
+          update={updateFilters}
+          kinds={scope.assignments.map((assignment) => assignment.type)}
+          afterSubject={
+            <SearchSelect
+              label={t('Задание')}
+              resetKey={storage.resetKey}
+              value={assignmentId}
+              placeholder={t('Все задания')}
+              options={scope.assignments
+                .filter(
+                  (assignment) =>
+                    (!groupId || assignment.groupId === groupId) &&
+                    (!filters.subjectId || assignment.subjectId === filters.subjectId) &&
+                    (!filters.type || assignment.type === filters.type),
+                )
+                .map((assignment) => ({ id: assignment.id, name: assignment.title }))}
+              onChange={(value) => updateFilters({ assignmentId: value })}
+            />
+          }
+        />
+      </TeacherFilterPanel>
       <div className="card teacher-table-wrap">
         {!rows.length ? (
           <EmptyState
@@ -1960,28 +1990,20 @@ export function AssignmentsPage() {
           </button>
         }
       />
-      <div className="teacher-toolbar">
-        <fieldset
-          className="teacher-filters"
-          disabled={!storage.ready}
-          style={{ border: 0, padding: 0, minWidth: 0 }}
-        >
-          <TeacherFilterFields
-            scope={scope}
-            filters={filters}
-            resetKey={storage.resetKey}
-            update={storage.update}
-            kinds={scope.assignments.map((assignment) => assignment.type)}
-          />
-          <button type="button" className="button small" onClick={storage.reset}>
-            {teacherUi[locale].reset}
-          </button>
-        </fieldset>
-        <p aria-live="polite">
-          {teacherUi[locale].results}: {assignments.length}
-        </p>
-      </div>
-      <StorageFeedback status={storage.status} />
+      <TeacherFilterPanel
+        ready={storage.ready}
+        status={storage.status}
+        count={assignments.length}
+        onReset={storage.reset}
+      >
+        <TeacherFilterFields
+          scope={scope}
+          filters={filters}
+          resetKey={storage.resetKey}
+          update={storage.update}
+          kinds={scope.assignments.map((assignment) => assignment.type)}
+        />
+      </TeacherFilterPanel>
       {!assignments.length ? (
         <EmptyState
           title={t('Заданий пока нет')}
@@ -1999,12 +2021,14 @@ export function AssignmentsPage() {
             );
             return (
               <article className="card teacher-assignment-card" key={assignment.id}>
-                <Badge kind="neutral">{title(data.groups, assignment.groupId)}</Badge>
-                <h2>{assignment.title}</h2>
-                <p>
-                  {title(data.subjects, assignment.subjectId)} {t('· до')}{' '}
-                  {formatDate(assignment.dueAt, locale)}, {formatTime(assignment.dueAt)}
-                </p>
+                <header className="teacher-assignment-heading">
+                  <Badge kind="neutral">{title(data.groups, assignment.groupId)}</Badge>
+                  <h2>{assignment.title}</h2>
+                  <p>
+                    {title(data.subjects, assignment.subjectId)} {t('· до')}{' '}
+                    {formatDate(assignment.dueAt, locale)}, {formatTime(assignment.dueAt)}
+                  </p>
+                </header>
                 <div className="teacher-assignment-counts">
                   {(['submitted', 'reviewed', 'missing'] as WorkStatus[]).map((status) => (
                     <div key={status}>

@@ -302,6 +302,9 @@ export async function importSqliteSnapshot(db, snapshot) {
     // A previously initialized but empty backend schema may predate the data extension.
     // Add its nullable lesson fields only after verifying that this target is empty.
     await tx.exec(`
+      ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS family_name TEXT;
+      ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS given_name TEXT;
+      ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS patronymic TEXT;
       ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS academic_year INTEGER CHECK(academic_year BETWEEN 1900 AND 9999);
       ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS semester INTEGER CHECK(semester IN (1,2));
       ALTER TABLE school_lessons ADD COLUMN IF NOT EXISTS archived_at TEXT;

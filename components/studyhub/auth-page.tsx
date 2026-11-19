@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react';
 import { ApiError, useStudyHub } from './context';
 import { Brand, Icon } from './shared';
 import { DemoRoleControl } from './demo-role-control';
+import { readUserName, UserNameFields } from './user-name-fields';
 
 function AuthField({
   name,
@@ -97,8 +98,7 @@ export function AuthPage({
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email') || '').trim(),
       password = String(form.get('password') || '');
-    const name = String(form.get('name') || '').trim(),
-      passwordConfirmation = String(form.get('passwordConfirmation') || '');
+    const passwordConfirmation = String(form.get('passwordConfirmation') || '');
     setError('');
     setFields({});
     setBusy(true);
@@ -109,7 +109,9 @@ export function AuthPage({
         });
       await request(`/api/auth/${register ? 'register' : 'login'}`, {
         method: 'POST',
-        body: register ? { name, email, password, passwordConfirmation } : { email, password },
+        body: register
+          ? { ...readUserName(form), email, password, passwordConfirmation }
+          : { email, password },
       });
       const session = await reloadSession();
       const home = session.user?.role === 'admin' ? '/overview' : '/today';
@@ -126,27 +128,10 @@ export function AuthPage({
       <section className="login-story">
         <Brand />
         <div className="login-story-copy">
-          <div className="eyebrow">{t('Учебная информация в одном месте')}</div>
-          <h1>
-            {t('Твой день.')}
-            <br />
-            {t('Твой ритм.')}
-          </h1>
-          <p>
-            {t(
-              'Расписание, задания и результаты учёбы — в одном пространстве, где легко найти главное.',
-            )}
-          </p>
+          <h1>{t('Учебное пространство')}</h1>
+          <p>{t('Расписание, задания и единый журнал оценок в одном учебном пространстве.')}</p>
           <div className="login-book-art" aria-hidden="true">
-            <div className="banner-art">
-              <div className="banner-orbit" />
-              <div className="book book-back" />
-              <div className="book" />
-              <span className="art-check">
-                <Icon name="check" />
-              </span>
-              <span className="spark">✦</span>
-            </div>
+            <Icon name="book" />
           </div>
           <div className="login-benefits">
             <span>
@@ -163,7 +148,6 @@ export function AuthPage({
             </span>
           </div>
         </div>
-        <small>{t('Меньше хаоса. Больше ясности.')}</small>
       </section>
       <section className="login-form-panel">
         <div className="login-form-inner">
@@ -183,13 +167,7 @@ export function AuthPage({
               {t('Регистрация')}
             </Link>
           </nav>
-          <div className="eyebrow">{register ? t('Начнём знакомство') : t('С возвращением')}</div>
           <h2 id="auth-title">{register ? t('Создать аккаунт') : t('Войти в StudyHUB')}</h2>
-          <p className="muted">
-            {register
-              ? t('Твоё учебное пространство начинается здесь.')
-              : t('Продолжи с того места, где остановился.')}
-          </p>
           {sessionError && (
             <div className="publication-error" role="alert">
               <span>{t(sessionError)}</span>
@@ -209,16 +187,7 @@ export function AuthPage({
             aria-labelledby="auth-title"
             aria-busy={busy}
           >
-            {register && (
-              <AuthField
-                name="name"
-                label={t('Имя и фамилия')}
-                autoComplete="name"
-                maxLength={120}
-                error={fields.name}
-                placeholder={t('Как к вам обращаться')}
-              />
-            )}
+            {register && <UserNameFields errors={fields} disabled={busy} />}
             <AuthField
               name="email"
               label={t('Электронная почта')}

@@ -421,6 +421,13 @@ test('Academic expansion retains old identities, access, lessons, files, works, 
             ? 'lesson_id'
             : 'id';
       const current = expanded.find((row) => row[key] === old[key]);
+      if (table === 'auth_users') {
+        const { family_name, given_name, patronymic, ...legacyFields } = current;
+        assert.deepEqual(legacyFields, { ...old }, `Preserve original user fields for ${old.id}`);
+        assert.ok(family_name && given_name, `Backfill name parts for ${old.id}`);
+        assert.equal(patronymic, null);
+        continue;
+      }
       assert.deepEqual(current, old, `Preserve original ${table} row ${old[key]}`);
     }
   }

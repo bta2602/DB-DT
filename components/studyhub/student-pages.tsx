@@ -29,12 +29,13 @@ import {
   roles,
   statusNames,
 } from '@/lib/studyhub/client-utils';
-import { useStudyHub } from './context';
+import { ApiError, useStudyHub } from './context';
 import { useI18n } from './preferences';
 import { Badge, EmptyState, Field, Icon, Modal, PageHeading } from './shared';
 import { AnnouncementsPanel } from './publication-panels';
 import { useBrowserStorage } from './use-browser-storage';
 import { StorageFeedback } from './storage-feedback';
+import { readUserName, UserNameFields } from './user-name-fields';
 import {
   defaultTaskFilters,
   isStudentTaskFilters,
@@ -280,7 +281,7 @@ export function StudentToday() {
     <>
       <PageHeading
         title={t('С возвращением, {value0}!', {
-          value0: String(user?.name.split(' ')[0] || t('студент')),
+          value0: user?.givenName || user?.name.split(' ')[0] || t('студент'),
         })}
         description={formatDate(today, locale)}
       />
@@ -438,46 +439,7 @@ export function TasksPage() {
         title={t('Мои задания')}
         description={t('От первого шага до обратной связи преподавателя.')}
       />
-      <p className="small muted" role="status">
-        {deadlineText.count}: {overdueCount}
-      </p>
-      <div className="publication-toolbar">
-        <SearchSelect
-          label={labels.subject}
-          options={subjects}
-          placeholder={labels.allSubjects}
-          value={subjectId}
-          resetKey={filterResetKey}
-          disabled={!stored.ready}
-          onChange={(value) => changeFilters({ subjectId: value })}
-        />
-        <Field label={labels.type}>
-          <select
-            value={type}
-            disabled={!stored.ready}
-            onChange={(event) => changeFilters({ type: event.target.value })}
-          >
-            <option value="">{labels.allTypes}</option>
-            {types.map((item) => (
-              <option key={item} value={item}>
-                {t(lessonKindLabel(item))}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={deadlineText.title}>
-          <select
-            value={deadline}
-            disabled={!stored.ready}
-            onChange={(event) => changeFilters({ deadline: event.target.value as DeadlineFilter })}
-          >
-            {deadlineFilters.map((item) => (
-              <option key={item} value={item}>
-                {deadlineText[item]}
-              </option>
-            ))}
-          </select>
-        </Field>
+      <div className="control-panel">
         <div className="tabs" role="group" aria-label={t('Статус задания')}>
           {taskStatuses.map((item) => (
             <button
@@ -492,32 +454,74 @@ export function TasksPage() {
             </button>
           ))}
         </div>
-        <input
-          className="select"
-          type="search"
-          value={query}
-          maxLength={500}
-          disabled={!stored.ready}
-          onChange={(event) => changeFilters({ query: event.target.value })}
-          placeholder={t('Найти задание…')}
-          aria-label={t('Поиск задания')}
-        />
-        <button
-          className="button"
-          type="button"
-          disabled={!stored.ready}
-          onClick={() => {
-            stored.reset();
-            setFilterResetKey((key) => key + 1);
-          }}
-        >
-          {labels.reset}
-        </button>
+        <div className="control-grid">
+          <Field label={t('Поиск задания')}>
+            <input
+              type="search"
+              value={query}
+              maxLength={500}
+              disabled={!stored.ready}
+              onChange={(event) => changeFilters({ query: event.target.value })}
+              placeholder={t('Найти задание…')}
+            />
+          </Field>
+          <SearchSelect
+            label={labels.subject}
+            options={subjects}
+            placeholder={labels.allSubjects}
+            value={subjectId}
+            resetKey={filterResetKey}
+            disabled={!stored.ready}
+            onChange={(value) => changeFilters({ subjectId: value })}
+          />
+          <Field label={labels.type}>
+            <select
+              value={type}
+              disabled={!stored.ready}
+              onChange={(event) => changeFilters({ type: event.target.value })}
+            >
+              <option value="">{labels.allTypes}</option>
+              {types.map((item) => (
+                <option key={item} value={item}>
+                  {t(lessonKindLabel(item))}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={deadlineText.title}>
+            <select
+              value={deadline}
+              disabled={!stored.ready}
+              onChange={(event) =>
+                changeFilters({ deadline: event.target.value as DeadlineFilter })
+              }
+            >
+              {deadlineFilters.map((item) => (
+                <option key={item} value={item}>
+                  {deadlineText[item]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="control-actions">
+          <button
+            className="button"
+            type="button"
+            disabled={!stored.ready}
+            onClick={() => {
+              stored.reset();
+              setFilterResetKey((key) => key + 1);
+            }}
+          >
+            {labels.reset}
+          </button>
+          <p className="control-status" role="status">
+            {labels.results}: {assignments.length} · {deadlineText.count}: {overdueCount}
+          </p>
+        </div>
+        <StorageFeedback status={stored.status} />
       </div>
-      <p className="small muted" role="status">
-        {labels.results}: {assignments.length}
-      </p>
-      <StorageFeedback status={stored.status} />
       {assignments.length ? (
         <AssignmentCards assignments={assignments} onOpen={setSelectedId} />
       ) : (
@@ -754,42 +758,29 @@ export function SubjectsPage() {
 function ProfileForm({ user }: { user: User }) {
   const { t } = useI18n();
   const { data, mutate, notify } = useStudyHub();
-  const [name, setName] = useState(user.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [nameErrors, setNameErrors] = useState<Record<string, string>>({});
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    const value = name.trim();
-    if (!value || value.length > 120) {
-      setError('Введите имя длиной от 1 до 120 символов.');
-      return;
-    }
+    const name = readUserName(new FormData(event.currentTarget));
     setBusy(true);
     setError('');
+    setNameErrors({});
     try {
-      await mutate('PATCH', '/api/profile', { name: value, version: user.version });
+      await mutate('PATCH', '/api/profile', { ...name, version: user.version });
       notify(t('Профиль сохранён.'));
     } catch (failure) {
       setError(messageOf(failure));
+      if (failure instanceof ApiError) setNameErrors(failure.fields);
     } finally {
       setBusy(false);
     }
   }
   return (
     <form onSubmit={submit} className="card card-pad profile-form" aria-busy={busy}>
-      <Field label={t('Имя и фамилия')}>
-        <input
-          name="name"
-          type="text"
-          required
-          maxLength={120}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          disabled={busy}
-          autoComplete="name"
-        />
-      </Field>
+      <UserNameFields user={user} errors={nameErrors} disabled={busy} />
       <Field label={t('Электронная почта')}>
         <input type="email" value={user.email} disabled />
       </Field>

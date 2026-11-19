@@ -28,6 +28,7 @@ import {
   deleteAnnouncement,
 } from './auth-store.mjs';
 import { maxSubmissionBytes } from './api-contract';
+import { userNameFields } from './user-names.mjs';
 import { databaseErrorInfo } from '../../database/connection.mjs';
 
 const COOKIE = 'studyhub_session';
@@ -247,16 +248,14 @@ export function register(request: NextRequest) {
     const previous = await mutationSession(request);
     if (previous.user)
       throw new AuthError(409, 'ALREADY_SIGNED_IN', 'Сначала выйдите из текущего аккаунта.');
-    const input = await body(request, ['name', 'email', 'password', 'passwordConfirmation']);
-    const session = await registerStudent(
-      {
-        name: input.name,
-        email: input.email,
-        password: input.password,
-        passwordConfirmation: input.passwordConfirmation,
-      },
-      previous.token,
-    );
+    const input = await body(request, [
+      'name',
+      ...userNameFields,
+      'email',
+      'password',
+      'passwordConfirmation',
+    ]);
+    const session = await registerStudent(input, previous.token);
     return writeCookie(
       json({ ok: true, csrfToken: session.csrfToken }),
       request,
@@ -285,15 +284,15 @@ export function bootstrap(request: NextRequest) {
 export function updateProfile(request: NextRequest) {
   return execute(request, async () => {
     const session = await mutationSession(request, true);
-    const input = await body(request, ['name', 'version']);
-    await updateOwnProfile(session.user!.id, input.name, input.version);
+    const input = await body(request, ['name', ...userNameFields, 'version']);
+    await updateOwnProfile(session.user!.id, input, input.version);
     return json({ ok: true });
   });
 }
 
 type DirectoryKind = 'users' | 'groups' | 'subjects' | 'rooms' | 'teaching-assignments';
 const directoryFields: Record<DirectoryKind, string[]> = {
-  users: ['name', 'email', 'role', 'groupId'],
+  users: ['name', ...userNameFields, 'email', 'role', 'groupId'],
   groups: ['name', 'course', 'curatorId', 'program', 'intakeYear', 'language'],
   subjects: ['name'],
   rooms: ['name', 'capacity', 'number', 'floor', 'type'],

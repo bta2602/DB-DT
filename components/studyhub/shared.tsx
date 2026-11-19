@@ -12,6 +12,7 @@ export function Icon({ name, className = '' }: { name: string; className?: strin
   return (
     <svg
       className={`icon ${className}`}
+      data-icon={name}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -44,15 +45,13 @@ export function PageHeading({
   description?: string;
   action?: ReactNode;
 }) {
-  const { t } = useI18n();
   return (
     <div className="page-heading">
       <div>
-        <div className="eyebrow">{t('Учебное пространство · StudyHUB')}</div>
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>
-      {action}
+      {action && <div className="page-heading-action">{action}</div>}
     </div>
   );
 }

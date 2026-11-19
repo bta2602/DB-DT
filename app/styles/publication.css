@@ -251,37 +251,16 @@
   color: #bbd0bd;
 }
 .login-book-art {
-  height: 190px;
+  display: flex;
+  align-items: center;
+  min-height: 190px;
   margin: 12px 0;
+  color: #c8ddd2;
 }
-.login-book-art .banner-art {
-  height: 150px;
-  transform: scale(1.2);
-  transform-origin: left top;
-  margin-left: 30px;
-}
-.login-book-art .banner-orbit {
-  width: 150px;
-  height: 150px;
-}
-.login-book-art .book {
-  top: 31px;
-  left: 49px;
-  width: 77px;
-  height: 98px;
-}
-.login-book-art .book-back {
-  left: 27px;
-  top: 22px;
-}
-.login-book-art .art-check {
-  left: 121px;
-  top: 101px;
-  border-color: #244d42;
-}
-.login-book-art .spark {
-  left: 145px;
-  top: 21px;
+.login-book-art > .icon {
+  width: 112px;
+  height: 112px;
+  stroke-width: 1.15;
 }
 .login-benefits {
   display: flex;

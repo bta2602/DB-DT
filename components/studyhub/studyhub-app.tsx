@@ -70,6 +70,7 @@ export function StudyHubApp({
   const mobileMenuButton = useRef<HTMLButtonElement>(null);
   const accountReturnFocus = useRef<HTMLElement | null>(null);
   const page = section || (user?.role === 'admin' ? 'overview' : 'today');
+  const refreshLabel = t('Обновить данные');
 
   useEffect(() => {
     document.title = `StudyHUB · ${page === 'academic' ? campusLabels[locale].academic : t(titles[page] || (page === 'register' ? 'Регистрация' : 'Вход'))}`;
@@ -195,17 +196,17 @@ export function StudyHubApp({
               aria-current={page === item ? 'page' : undefined}
               onClick={() => setMenu(false)}
             >
-              <Icon name={icon} />
-              {item === 'academic' ? campusLabels[locale].academic : t(titles[item])}
+              <span className="nav-icon">
+                <Icon name={icon} />
+              </span>
+              <span className="nav-title">
+                {item === 'academic' ? campusLabels[locale].academic : t(titles[item])}
+              </span>
               {item === 'review' && waiting > 0 && <span className="nav-count">{waiting}</span>}
             </Link>
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        <div className="sidebar-note">
-          <div className="eyebrow">{t('Меньше хаоса. Больше ясности.')}</div>
-          <p>{t('Всё, что нужно для учёбы, теперь в одном месте.')}</p>
-        </div>
         <button
           ref={accountButton}
           type="button"
@@ -252,12 +253,13 @@ export function StudyHubApp({
             <PreferenceControls />
             <button
               type="button"
-              className="icon-btn"
-              aria-label={t('Обновить данные')}
+              className="icon-btn refresh-button"
+              aria-label={refreshLabel}
+              title={refreshLabel}
               disabled={busy || switchingRole}
               onClick={() => void refreshData()}
             >
-              <Icon name="clock" />
+              <Icon name="refresh" />
             </button>
           </div>
         </header>
@@ -283,7 +285,7 @@ export function StudyHubApp({
           </Suspense>
           <footer className="page-footer">
             <span>
-              <Icon name="book" className="sm" /> StudyHUB · {t('Учебная информация в одном месте')}
+              <Icon name="book" className="sm" /> StudyHUB
             </span>
             <span>{formatDate(dateKey(new Date(now)), locale)}</span>
           </footer>

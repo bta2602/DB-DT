@@ -6,6 +6,7 @@ import { migrateSqliteGrading } from './migrations/grading-100.mjs';
 import { migrateSqliteAcademic as migrateSqliteAcademicRules } from './migrations/academic-rules.mjs';
 import { migrateSqliteEveningSlots } from './migrations/evening-slots.mjs';
 import { migrateSqliteLessonArchive } from './migrations/lesson-archive.mjs';
+import { migrateSqliteUserNames } from './migrations/user-names.mjs';
 
 // Deliberate entry points for maintenance commands; neither runs on connection.
 export { migrateSqliteAcademic, migratePostgresAcademic } from './migrations/academic-data.mjs';
@@ -172,7 +173,6 @@ async function connect(key) {
     db.close = () => pool.end();
     return db;
   }
-  if (process.env.VERCEL) throw new Error('DATABASE_URL is required on Vercel.');
   const directory = resolve(
     /* turbopackIgnore: true */ process.env.STUDYHUB_DATA_DIR || '.studyhub',
   );
@@ -205,6 +205,7 @@ async function connect(key) {
   migrateSqliteAcademicRules(sqlite);
   migrateSqliteEveningSlots(sqlite);
   migrateSqliteLessonArchive(sqlite);
+  migrateSqliteUserNames(sqlite);
   chmodSync(filename, 0o600);
   const queue = serialQueue();
   const query = (sql, args) => {

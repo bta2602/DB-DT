@@ -378,7 +378,7 @@ test('Academic rules protect real storage and retain historical records', async 
           admin,
           'users',
           {
-            name: 'Outsider',
+            name: 'Alex Outsider',
             email: 'outsider@test.example',
             role: 'student',
             groupId: 'current-group',
@@ -392,7 +392,7 @@ test('Academic rules protect real storage and retain historical records', async 
               admin,
               'users',
               {
-                name: 'Student',
+                name: 'Taylor Student',
                 email: 'student@test.example',
                 role: 'student',
                 groupId: 'current-group',

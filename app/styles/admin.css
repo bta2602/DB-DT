@@ -101,7 +101,6 @@
 .admin-kpi-head .icon {
   width: 18px;
   height: 18px;
-  color: #789275;
 }
 .admin-kpi-value {
   font-size: 28px;
@@ -239,7 +238,7 @@
   gap: 9px;
 }
 .entity-name .icon {
-  color: var(--green);
+  color: var(--muted);
   width: 17px;
   height: 17px;
 }
@@ -840,7 +839,7 @@
   padding: 55px 20px;
 }
 .planner-no-lessons .icon {
-  color: #91a585;
+  color: var(--muted);
   width: 30px;
   height: 30px;
   margin-bottom: 12px;

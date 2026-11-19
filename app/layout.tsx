@@ -1,4 +1,5 @@
 import type { Viewport } from 'next';
+import localFont from 'next/font/local';
 import { pageMetadata } from '@/lib/studyhub/page-metadata';
 import { cookies } from 'next/headers';
 import { StudyHubProvider } from '@/components/studyhub/context';
@@ -24,11 +25,19 @@ import './globals.css';
 import './styles/preferences.css';
 import './styles/dark.css';
 import './styles/table-tools.css';
+import './styles/interface.css';
+
+const inter = localFont({
+  src: './fonts/InterVariable.woff2',
+  variable: '--font-inter',
+  display: 'swap',
+  weight: '100 900',
+});
 
 export async function generateMetadata() {
   return pageMetadata('Учебное пространство');
 }
-export const viewport: Viewport = { themeColor: '#2f6355' };
+export const viewport: Viewport = { themeColor: '#12614e' };
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // eslint-disable-next-line react-hooks/purity -- A single request-time clock snapshot is serialized for identical SSR and hydration.
   const initialNow = Date.now();
   return (
-    <html lang={locale} data-theme={theme}>
+    <html lang={locale} data-theme={theme} className={inter.variable}>
       <body>
         <PreferencesProvider initialLocale={locale} initialTheme={theme}>
           <SkipLink />

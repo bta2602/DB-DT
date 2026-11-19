@@ -1,24 +1,26 @@
 /* StudyHUB: общий источник визуальных токенов. Подключается до стилей компонентов. */
 :root {
   color-scheme: light;
-  --bg: #f7f8f5;
+  --bg: #f3f5f8;
   --white: #ffffff;
-  --ink: #25332d;
-  --muted: #5e6c63;
-  --green: #2f6355;
-  --dark: #244d42;
-  --soft: #edf3ec;
-  --line: #dce3d9;
-  --control-border: #7b8e80;
-  --focus: #2f6355;
+  --ink: #18242e;
+  --muted: #52616f;
+  --green: #0d6151;
+  --dark: #084a3d;
+  --soft: #e3f2ee;
+  --line: #d9e1e8;
+  --control-border: #a2b0ba;
+  --focus: #227b68;
   --amber: #805416;
   --amber-bg: #fbf2e2;
-  --blue: #365e75;
-  --blue-bg: #edf2f6;
+  --blue: #2f5988;
+  --blue-bg: #e9f1fb;
   --red: #9c3d31;
   --red-bg: #f9eeea;
 
-  --font-sans: Inter, 'Segoe UI', Arial, sans-serif;
+  --font-sans:
+    var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', Arial,
+    sans-serif;
   --font-mono: Consolas, 'Courier New', monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
@@ -37,7 +39,16 @@
   --radius-lg: 22px;
   --touch-target: 44px;
   --content-max: 1440px;
-  --shadow: 0 16px 60px #243d3220;
+  --shadow: 0 20px 64px #17232b26;
+  --elevation: 0 1px 2px #17232b08, 0 6px 20px #17232b07;
+  --active-surface: #e9edf1;
+  --control-surface: #f6f8fa;
+  --primary-fill: #125e50;
+  --primary-fill-hover: #094c40;
+  --on-primary: #fff;
+  --brand-gradient: linear-gradient(150deg, #218679, #095445 85%);
+  --sidebar-width: 244px;
+  --gutter: clamp(20px, 3vw, 44px);
 
   --surface: var(--white);
   --text: var(--ink);

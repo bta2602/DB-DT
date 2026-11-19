@@ -56,8 +56,8 @@ function RoomEditor({ room, onClose }: { room?: Room; onClose: () => void }) {
   return (
     <Modal title={room ? labels.editRoom : labels.addRoom} onClose={onClose} closeDisabled={busy}>
       <form onSubmit={save}>
-        <fieldset disabled={busy} className="campus-panel">
-          <div className="campus-grid">
+        <fieldset disabled={busy} className="campus-form">
+          <div className="control-grid">
             <Field label={labels.number}>
               <input
                 value={number}
@@ -176,8 +176,8 @@ export function RoomsPage() {
           )
         }
       />
-      <div className="campus-panel">
-        <div className="campus-toolbar">
+      <div className="control-panel">
+        <div className="control-grid">
           <Field label={labels.search}>
             <input
               type="search"
@@ -227,7 +227,7 @@ export function RoomsPage() {
             </select>
           </Field>
         </div>
-        <div className="form-actions">
+        <div className="control-actions">
           <button
             className="button"
             type="button"
@@ -236,13 +236,13 @@ export function RoomsPage() {
           >
             {labels.reset}
           </button>
+          <p className="control-status" role="status">
+            {labels.found}: {rooms.length} {labels.total} {data.rooms.length}
+          </p>
         </div>
         <StorageFeedback status={storage.status} />
         {!availabilityKnown && <p className="campus-notice">{labels.unknownOccupancy}</p>}
       </div>
-      <p className="muted" role="status">
-        {labels.found}: {rooms.length} {labels.total} {data.rooms.length}
-      </p>
       {rooms.length ? (
         <div className="card table-wrap">
           <table className="data-table">

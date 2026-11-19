@@ -45,9 +45,11 @@ function SaveButton({
 }) {
   const { locale } = useI18n();
   return (
-    <button type="submit" className="button primary" disabled={busy || disabled}>
-      {busy ? campusLabels[locale].saving : children}
-    </button>
+    <div className="control-actions">
+      <button type="submit" className="button primary" disabled={busy || disabled}>
+        {busy ? campusLabels[locale].saving : children}
+      </button>
+    </div>
   );
 }
 
@@ -120,7 +122,7 @@ function TeacherProfile({
   );
   const { save, busy, error } = useSave();
   return (
-    <div className="campus-panel">
+    <section className="campus-panel">
       <h2>{labels[mode]}</h2>
       <p className="campus-notice">
         {mode === 'subjects' && labels.teacherLimit} {labels.replaceHint}
@@ -132,7 +134,7 @@ function TeacherProfile({
             void save('/api/academic/teacher-subjects', { teacherId, subjectIds: subjects });
           }}
         >
-          <fieldset disabled={busy}>
+          <fieldset disabled={busy} className="campus-form">
             <legend>
               {labels.subjects} ({subjects.length}/3)
             </legend>
@@ -148,7 +150,7 @@ function TeacherProfile({
             void save('/api/academic/teacher-languages', { teacherId, languages });
           }}
         >
-          <fieldset disabled={busy}>
+          <fieldset disabled={busy} className="campus-form">
             <legend>{labels.languages}</legend>
             <div className="campus-checks">
               {(['kk', 'ru'] as const).map((language) => (
@@ -177,7 +179,7 @@ function TeacherProfile({
           {error}
         </p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -216,8 +218,8 @@ function GroupProfile({ group }: { group: Group }) {
       <h2>
         {labels.profile}: {group.name}
       </h2>
-      <fieldset disabled={busy}>
-        <div className="campus-grid">
+      <fieldset disabled={busy} className="campus-form">
+        <div className="control-grid">
           <Field label={labels.program}>
             <select
               value={program}
@@ -303,7 +305,10 @@ function CurriculumForm({
         });
       }}
     >
-      <fieldset disabled={busy || !Number.isInteger(year) || year < 2000 || year > 9998}>
+      <fieldset
+        className="campus-form"
+        disabled={busy || !Number.isInteger(year) || year < 2000 || year > 9998}
+      >
         <p className="campus-notice">
           {labels.replaceHint} {labels.subjects}: {selected.length}
         </p>
@@ -336,11 +341,11 @@ function GroupSettings({ group }: { group: Group }) {
     .sort()
     .join(',');
   return (
-    <>
+    <div className="campus-profile-grid">
       <GroupProfile key={`${group.id}:${group.version}`} group={group} />
-      <div className="campus-panel">
+      <section className="campus-panel">
         <h2>{labels.curriculum}</h2>
-        <div className="campus-grid">
+        <div className="control-grid">
           <Field label={labels.year}>
             <input
               type="number"
@@ -363,8 +368,8 @@ function GroupSettings({ group }: { group: Group }) {
           year={Number(year)}
           semester={semester}
         />
-      </div>
-    </>
+      </section>
+    </div>
   );
 }
 
@@ -386,7 +391,7 @@ function Assignments() {
     (row) => row.groupId === groupId && row.subjectId === subject && row.teacherId === teacher,
   );
   return (
-    <div className="campus-panel">
+    <section className="campus-panel">
       <h2>{labels.assignments}</h2>
       <form
         onSubmit={(event) => {
@@ -400,8 +405,8 @@ function Assignments() {
             });
         }}
       >
-        <fieldset disabled={busy}>
-          <div className="campus-grid">
+        <fieldset disabled={busy} className="campus-form">
+          <div className="control-grid">
             <SearchSelect
               label={labels.group}
               options={data.groups}
@@ -467,7 +472,7 @@ function Assignments() {
         </fieldset>
       </form>
       {groupId && (
-        <>
+        <div className="campus-assignment-list">
           <h3>{labels.currentAssignments}</h3>
           <ul>
             {data.teachingAssignments
@@ -479,9 +484,9 @@ function Assignments() {
                 </li>
               ))}
           </ul>
-        </>
+        </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -531,10 +536,10 @@ export function AcademicSettings() {
           {error}
         </p>
       )}
-      <div className="campus-tabs" aria-label={labels.academic}>
+      <div className="tabs campus-tabs" role="group" aria-label={labels.academic}>
         {(['teachers', 'groups', 'assignments'] as const).map((item) => (
           <button
-            className={`button ${tab === item ? 'primary' : ''}`}
+            className={tab === item ? 'active' : ''}
             type="button"
             aria-pressed={tab === item}
             key={item}
@@ -547,24 +552,28 @@ export function AcademicSettings() {
       {tab === 'teachers' &&
         (teacher ? (
           <>
-            <SearchSelect
-              label={labels.teacher}
-              options={teachers}
-              value={teacher}
-              onChange={setTeacherId}
-              placeholder={labels.select}
-              required
-            />
-            <TeacherProfile
-              key={`${user.id}:${teacher}:subjects:${teacherSubjectsKey}`}
-              teacherId={teacher}
-              mode="subjects"
-            />
-            <TeacherProfile
-              key={`${user.id}:${teacher}:languages:${teacherLanguagesKey}`}
-              teacherId={teacher}
-              mode="languages"
-            />
+            <div className="control-panel">
+              <SearchSelect
+                label={labels.teacher}
+                options={teachers}
+                value={teacher}
+                onChange={setTeacherId}
+                placeholder={labels.select}
+                required
+              />
+            </div>
+            <div className="campus-profile-grid">
+              <TeacherProfile
+                key={`${user.id}:${teacher}:subjects:${teacherSubjectsKey}`}
+                teacherId={teacher}
+                mode="subjects"
+              />
+              <TeacherProfile
+                key={`${user.id}:${teacher}:languages:${teacherLanguagesKey}`}
+                teacherId={teacher}
+                mode="languages"
+              />
+            </div>
           </>
         ) : (
           <EmptyState title={labels.noStaff} />
@@ -572,14 +581,16 @@ export function AcademicSettings() {
       {tab === 'groups' &&
         (group ? (
           <>
-            <SearchSelect
-              label={labels.group}
-              options={data.groups}
-              value={group.id}
-              onChange={setGroupId}
-              placeholder={labels.select}
-              required
-            />
+            <div className="control-panel">
+              <SearchSelect
+                label={labels.group}
+                options={data.groups}
+                value={group.id}
+                onChange={setGroupId}
+                placeholder={labels.select}
+                required
+              />
+            </div>
             <GroupSettings key={`${user.id}:${group.id}`} group={group} />
           </>
         ) : (

@@ -1,23 +1,30 @@
 /* Dark palette and overrides for the original light interface. */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #101916;
-  --white: #1b2822;
-  --ink: #e6eee8;
-  --muted: #adbbb2;
-  --green: #94d4b7;
-  --dark: #b1e2cc;
-  --soft: #263c31;
-  --line: #3b5144;
-  --control-border: #78917e;
-  --focus: #a5e5c9;
+  --bg: #11171e;
+  --white: #1b242d;
+  --ink: #eef3f9;
+  --muted: #b1c0cd;
+  --green: #a0e1ce;
+  --dark: #c1efdf;
+  --soft: #233b38;
+  --line: #35434f;
+  --control-border: #748797;
+  --focus: #a6ead9;
   --amber: #ebc57d;
   --amber-bg: #413621;
-  --blue: #a8cfeb;
-  --blue-bg: #253a47;
+  --blue: #b4d2fc;
+  --blue-bg: #27374e;
   --red: #f1aca0;
   --red-bg: #482f2c;
   --shadow: 0 18px 60px #0008;
+  --elevation: 0 1px 2px #0003, 0 7px 22px #0002;
+  --active-surface: #2b3743;
+  --control-surface: #202b36;
+  --primary-fill: #9adeca;
+  --primary-fill-hover: #c2eddf;
+  --on-primary: #122d27;
+  --brand-gradient: linear-gradient(150deg, #2b917e, #14584f 85%);
 }
 [data-theme='dark'] button:focus-visible,
 [data-theme='dark'] a:focus-visible,
@@ -29,15 +36,12 @@
 }
 [data-theme='dark'] .skip,
 [data-theme='dark'] .sidebar,
-[data-theme='dark'] .workspace-logo,
 [data-theme='dark'] .nav-item.active,
 [data-theme='dark'] .nav-count,
 [data-theme='dark'] .avatar.teacher,
 [data-theme='dark'] .button,
 [data-theme='dark'] .button.white,
 [data-theme='dark'] .card,
-[data-theme='dark'] .book,
-[data-theme='dark'] .art-check,
 [data-theme='dark'] .lesson-row,
 [data-theme='dark'] .lesson-row.past,
 [data-theme='dark'] .task-list,
@@ -92,17 +96,14 @@
 }
 [data-theme='dark'] .nav-item,
 [data-theme='dark'] .icon-btn,
-[data-theme='dark'] .spark,
 [data-theme='dark'] .lesson-room,
 [data-theme='dark'] .week-progress p,
 [data-theme='dark'] .tabs button,
-[data-theme='dark'] .empty .icon,
 [data-theme='dark'] .timetable-lesson small,
 [data-theme='dark'] .drawer-section p,
 [data-theme='dark'] .drawer-section li,
 [data-theme='dark'] .success-box p,
 [data-theme='dark'] .snapshot-label,
-[data-theme='dark'] .admin-kpi-head .icon,
 [data-theme='dark'] .admin-kpi-foot,
 [data-theme='dark'] .live-filter-line button,
 [data-theme='dark'] .live-person,
@@ -111,13 +112,11 @@
 [data-theme='dark'] .week-event small,
 [data-theme='dark'] .planner-audit summary,
 [data-theme='dark'] .detail-note,
-[data-theme='dark'] .planner-no-lessons .icon,
 [data-theme='dark'] .teacher-lesson p,
 [data-theme='dark'] .teacher-lesson .lesson-tags,
 [data-theme='dark'] .teacher-grade-table th strong,
 [data-theme='dark'] .teacher-grade-table th small,
 [data-theme='dark'] .journal-help,
-[data-theme='dark'] .preview-empty .icon,
 [data-theme='dark'] .work-conditions .conditions-content,
 [data-theme='dark'] .review-rubric label,
 [data-theme='dark'] .teacher-empty-cell,
@@ -187,10 +186,6 @@
 [data-theme='dark'] .room-button > span,
 [data-theme='dark'] .room-legend i {
   background: var(--soft);
-}
-[data-theme='dark'] .subject-icon.clay {
-  background: var(--white);
-  color: var(--red);
 }
 [data-theme='dark'] .week-progress,
 [data-theme='dark'] .teacher-lesson {
@@ -269,18 +264,23 @@
   color: var(--muted);
   opacity: 1;
 }
-[data-theme='dark'] .button.primary,
 [data-theme='dark'] .brand-mark,
 [data-theme='dark'] .welcome-banner,
 [data-theme='dark'] .calendar-day.today,
-[data-theme='dark'] .login-art,
-[data-theme='dark'] .role-control-button[aria-pressed='true'] {
-  background: #326b55;
+[data-theme='dark'] .login-art {
+  background: #23594d;
   color: #fff;
   border-color: #568b72;
 }
+
+[data-theme='dark'] .button.primary,
+[data-theme='dark'] .role-control-button[aria-pressed='true'] {
+  background: var(--primary-fill);
+  color: var(--on-primary);
+  border-color: var(--primary-fill);
+}
 [data-theme='dark'] .button.primary:hover {
-  background: #3b7c62;
+  background: var(--primary-fill-hover);
 }
 [data-theme='dark'] .login-story {
   background: #153c2c;

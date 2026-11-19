@@ -70,6 +70,9 @@ export const dictionary: Record<string, readonly [kk: string, en: string]> = {
     'First add a teacher, group and subject in the other tabs.',
   ],
   'Имя и фамилия': ['Аты-жөні', 'Full name'],
+  Фамилия: ['Тегі', 'Last name'],
+  Имя: ['Аты', 'First name'],
+  'Отчество (если есть)': ['Әкесінің аты (бар болса)', 'Patronymic (if any)'],
   Название: ['Атауы', 'Name'],
   Почта: ['Пошта', 'Email'],
   Роль: ['Рөл', 'Role'],
@@ -769,6 +772,22 @@ export const dictionary: Record<string, readonly [kk: string, en: string]> = {
   'Укажите имя длиной от 1 до 120 символов.': [
     'Аты-жөнін 1–120 таңбамен көрсетіңіз.',
     'Enter a name between 1 and 120 characters.',
+  ],
+  'Проверьте фамилию, имя и отчество.': [
+    'Тегін, атын және әкесінің атын тексеріңіз.',
+    'Check the last name, first name, and patronymic.',
+  ],
+  'Укажите фамилию длиной от 1 до 60 символов.': [
+    'Тегін 1–60 таңбамен көрсетіңіз.',
+    'Enter a last name between 1 and 60 characters.',
+  ],
+  'Укажите имя длиной от 1 до 60 символов.': [
+    'Атын 1–60 таңбамен көрсетіңіз.',
+    'Enter a first name between 1 and 60 characters.',
+  ],
+  'Укажите отчество длиной до 60 символов.': [
+    'Әкесінің атын 60 таңбаға дейін енгізіңіз.',
+    'Enter a patronymic of up to 60 characters.',
   ],
   'Пароль должен содержать от 12 до 128 символов.': [
     'Құпиясөзде 12–128 таңба болуы керек.',

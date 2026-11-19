@@ -97,6 +97,7 @@ try {
       '--test-reporter=spec',
       'tests/browser-storage.test.mjs',
       'tests/teacher-filters.test.mjs',
+      'tests/journal-columns.test.mjs',
       'tests/student-task-filters.test.mjs',
       'tests/schedule-filters.test.mjs',
       'tests/deadlines.test.mjs',
@@ -108,6 +109,7 @@ try {
       'tests/academic-client.test.mjs',
       'tests/lesson-archive-backend.test.mjs',
       'tests/lesson-display.test.mjs',
+      'tests/user-names.test.mjs',
     ],
     {
       STUDYHUB_TEST_STORAGE_DIR: join(directory, 'ordinary-database'),

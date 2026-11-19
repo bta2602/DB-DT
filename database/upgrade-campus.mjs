@@ -1,5 +1,6 @@
 import { cleanText, campusNotices } from './seeds/clean-records.mjs';
 import { CAMPUS_SEED_ID, LESSON_SLOTS } from './seeds/campus-data.mjs';
+import { splitLegacyName } from '../lib/studyhub/user-names.mjs';
 
 export function readSeedContext(db) {
   return {
@@ -36,12 +37,16 @@ export function prepareCampusUpgrade(db, now = new Date()) {
     for (const row of db
       .prepare('SELECT id,name,email FROM auth_users WHERE is_demo=1 AND version=1')
       .all()) {
-      if (generated(row.id))
-        db.prepare('UPDATE auth_users SET name=?,email=? WHERE id=?').run(
-          cleanText(row.name),
-          cleanText(row.email),
-          row.id,
-        );
+      if (!generated(row.id)) continue;
+      const name = cleanText(row.name);
+      if (name !== row.name) {
+        const { familyName, givenName, patronymic } = splitLegacyName(name);
+        db.prepare(
+          'UPDATE auth_users SET name=?,family_name=?,given_name=?,patronymic=?,email=? WHERE id=?',
+        ).run(name, familyName, givenName, patronymic, cleanText(row.email), row.id);
+      } else {
+        db.prepare('UPDATE auth_users SET email=? WHERE id=?').run(cleanText(row.email), row.id);
+      }
     }
     for (const table of ['school_groups', 'school_subjects', 'school_rooms']) {
       for (const row of db.prepare(`SELECT id,name FROM ${table} WHERE version=1`).all()) {

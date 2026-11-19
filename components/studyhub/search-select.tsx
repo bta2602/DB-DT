@@ -4,6 +4,7 @@ import '@/app/styles/lesson-tools.css';
 import { useId, useState, type ReactNode } from 'react';
 import { lessonToolsLabels } from '@/lib/studyhub/lesson-tools-labels';
 import { useI18n } from './preferences';
+import { Icon } from './shared';
 
 export type SearchOption = { id: string; name: string; search?: string; disabled?: boolean };
 
@@ -53,6 +54,7 @@ export function SearchSelect({
       <label htmlFor={`${id}-select`}>{label}</label>
       {children}
       <div className="search-select-search">
+        <Icon name="search" className="sm" />
         <input
           type="search"
           value={query}
@@ -67,12 +69,12 @@ export function SearchSelect({
         {query && (
           <button
             type="button"
-            className="button small"
+            className="icon-btn"
             disabled={disabled}
             onClick={() => setQuery('')}
             aria-label={`${labels.reset}: ${label}`}
           >
-            ×
+            <Icon name="close" className="sm" />
           </button>
         )}
       </div>
@@ -83,7 +85,7 @@ export function SearchSelect({
         required={required}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        aria-describedby={`${id}-count`}
+        aria-describedby={!disabled && (query || !matches.length) ? `${id}-count` : undefined}
       >
         <option value="">{placeholder}</option>
         {outside && (
@@ -97,8 +99,15 @@ export function SearchSelect({
           </option>
         ))}
       </select>
-      <small id={`${id}-count`} className="muted" aria-live="polite">
-        {matches.length ? `${labels.matches}: ${matches.length}` : labels.nothing}
+      <small
+        id={`${id}-count`}
+        className="muted"
+        aria-live="polite"
+        hidden={disabled || (!query && matches.length > 0)}
+      >
+        {!disabled &&
+          (query || !matches.length) &&
+          (matches.length ? `${labels.matches}: ${matches.length}` : labels.nothing)}
       </small>
     </div>
   );

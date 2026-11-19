@@ -1,5 +1,6 @@
 import type { Assignment } from './api-contract';
 import type { DeadlineFilter } from './deadlines';
+import { recognizedAssessmentKind } from './assessment-kind.mjs';
 
 export const taskStatuses = ['all', 'missing', 'submitted', 'revision', 'reviewed'] as const;
 export type StudentTaskFilters = {
@@ -38,12 +39,15 @@ export function normalizeTaskFilters(
   value: StudentTaskFilters,
   assignments: Assignment[],
 ): StudentTaskFilters {
+  const type = assignments.some((item) => item.type === value.type)
+    ? value.type
+    : recognizedAssessmentKind(value.type);
   return {
     ...value,
     subjectId: assignments.some((item) => item.subjectId === value.subjectId)
       ? value.subjectId
       : '',
-    type: assignments.some((item) => item.type === value.type) ? value.type : '',
+    type: type && assignments.some((item) => item.type === type) ? type : '',
   };
 }
 

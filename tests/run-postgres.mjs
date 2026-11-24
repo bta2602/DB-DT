@@ -8,6 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 import { TestClient } from './http-client.mjs';
+import { assertDifferentPostgresTargets } from '../scripts/postgres-target.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const nextBin = join(root, 'node_modules', 'next', 'dist', 'bin', 'next');
@@ -55,20 +56,15 @@ async function main() {
       throw error;
     }),
   );
-  const qaUrl = new URL(qa.DATABASE_URL);
-  const productionHost = production.DATABASE_URL
-    ? new URL(production.DATABASE_URL).hostname
-    : qa.PRODUCTION_DATABASE_HOST;
-  assert.ok(productionHost, 'Provide .env.local or PRODUCTION_DATABASE_HOST in the QA env file.');
-  const productionUrl = new URL(`postgresql://${productionHost}`);
-  const endpoint = (url) => url.hostname.replace('-pooler.', '.').toLowerCase();
-  assert.ok(['postgres:', 'postgresql:'].includes(qaUrl.protocol), 'QA requires PostgreSQL.');
-  assert.notEqual(
-    endpoint(qaUrl),
-    endpoint(productionUrl),
-    'QA and production endpoints must differ.',
+  assert.ok(
+    production.DATABASE_URL || qa.PRODUCTION_DATABASE_HOST,
+    'Provide .env.local or PRODUCTION_DATABASE_HOST in the QA env file.',
   );
-  credentials = qa.DATABASE_URL;
+  credentials = qa.DATABASE_URL || '';
+  const qaTarget = assertDifferentPostgresTargets(
+    qa.DATABASE_URL,
+    production.DATABASE_URL || `postgresql://${qa.PRODUCTION_DATABASE_HOST}`,
+  );
   const origin = new URL(qa.TEST_BASE_URL || 'http://127.0.0.1:3101');
   assert.equal(origin.protocol, 'http:');
   assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname));
@@ -97,7 +93,8 @@ async function main() {
     STUDYHUB_ORIGIN: baseUrl,
     TEST_BASE_URL: baseUrl,
     STUDYHUB_TEST_POSTGRES: 'true',
-    STUDYHUB_TEST_PG_HOST: qaUrl.hostname,
+    STUDYHUB_TEST_PG_HOST: qaTarget.hostname,
+    STUDYHUB_TEST_PG_IDENTITY: qaTarget.identity,
     NEXT_TELEMETRY_DISABLED: '1',
   };
   process.env.DATABASE_URL = environment.DATABASE_URL;

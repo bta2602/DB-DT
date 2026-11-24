@@ -33,11 +33,13 @@ export function LessonTypeButtons({
   value,
   onChange,
   disabled = false,
+  availableKinds,
   label,
 }: {
   value: LessonKind | '';
   onChange: (kind: LessonKind) => void;
   disabled?: boolean;
+  availableKinds?: readonly LessonKind[];
   label: string;
 }) {
   const { t } = useI18n();
@@ -49,7 +51,7 @@ export function LessonTypeButtons({
           type="button"
           className={value === kind ? 'active' : ''}
           aria-pressed={value === kind}
-          disabled={disabled}
+          disabled={disabled || (availableKinds !== undefined && !availableKinds.includes(kind))}
           onClick={() => onChange(kind)}
         >
           {t(lessonKindLabel(kind))}

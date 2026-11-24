@@ -3,12 +3,16 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { closeDatabase, getDatabase, runTransaction } from '../database/connection.mjs';
 import { saveDirectory, updateOwnProfile, saveGrade } from '../lib/studyhub/auth-store.mjs';
+import { postgresTarget } from '../scripts/postgres-target.mjs';
 
 test(
   'PostgreSQL adapter and concurrent changes on the isolated QA branch',
   { skip: process.env.STUDYHUB_TEST_POSTGRES !== 'true' },
   async (t) => {
-    assert.equal(new URL(process.env.DATABASE_URL).hostname, process.env.STUDYHUB_TEST_PG_HOST);
+    const expectedIdentity =
+      process.env.STUDYHUB_TEST_PG_IDENTITY ||
+      postgresTarget(`postgresql://${process.env.STUDYHUB_TEST_PG_HOST}`).identity;
+    assert.equal(postgresTarget(process.env.DATABASE_URL).identity, expectedIdentity);
     const db = await getDatabase();
     assert.equal(db.dialect, 'postgres');
     t.after(closeDatabase);

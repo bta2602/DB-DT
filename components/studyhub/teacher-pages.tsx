@@ -1798,31 +1798,43 @@ function NewAssignment({
       lesson.groupId === groupId &&
       lesson.subjectId === subjectId &&
       lesson.status === 'scheduled' &&
-      formLessonKind(lesson.kind) === kind,
+      formLessonKind(lesson.kind),
   );
-  const lessons = plannedLessons
-    .filter((lesson) => {
-      if (
-        kind === 'srsp' &&
-        !data.lessons.some(
-          (practice) =>
-            practice.id === lesson.practiceId &&
-            practice.status === 'scheduled' &&
-            !practice.archivedAt &&
-            practice.groupId === groupId &&
-            practice.subjectId === subjectId &&
-            formLessonKind(practice.kind) === 'practice',
-        )
+  const eligibleLessons = plannedLessons.filter((lesson) => {
+    if (
+      formLessonKind(lesson.kind) === 'srsp' &&
+      !data.lessons.some(
+        (practice) =>
+          practice.id === lesson.practiceId &&
+          practice.status === 'scheduled' &&
+          !practice.archivedAt &&
+          practice.groupId === groupId &&
+          practice.subjectId === subjectId &&
+          formLessonKind(practice.kind) === 'practice',
       )
-        return false;
-      return (
-        subjectsForDate(data, groupId, lesson.date).some((subject) => subject.id === subjectId) &&
-        teachersForSubject(data, groupId, subjectId).some((teacher) => teacher.id === user?.id)
-      );
-    })
+    )
+      return false;
+    return (
+      subjectsForDate(data, groupId, lesson.date).some((subject) => subject.id === subjectId) &&
+      teachersForSubject(data, groupId, subjectId).some((teacher) => teacher.id === user?.id)
+    );
+  });
+  const availableKinds = (['lecture', 'practice', 'srsp'] as const).filter((value) =>
+    eligibleLessons.some((lesson) => formLessonKind(lesson.kind) === value),
+  );
+  const nextKind = availableKinds.find((value) => value === kind) ?? availableKinds[0] ?? kind;
+  const lessons = eligibleLessons
+    .filter((lesson) => formLessonKind(lesson.kind) === nextKind)
     .sort((first, second) =>
       lessonSortKey(first, data.lessons).localeCompare(lessonSortKey(second, data.lessons)),
     );
+  if (
+    kind !== nextKind ||
+    (selectedLesson && !lessons.some((lesson) => lesson.id === selectedLesson))
+  ) {
+    setKind(nextKind);
+    setSelectedLesson('');
+  }
   const linkedLesson =
     lessons.find((lesson) => lesson.id === selectedLesson) ||
     (lessons.length === 1 ? lessons[0] : undefined);
@@ -1934,7 +1946,8 @@ function NewAssignment({
           <div className="assignment-create-type">
             <span>{labels.assignmentType}</span>
             <LessonTypeButtons
-              value={kind}
+              value={availableKinds.length ? nextKind : ''}
+              availableKinds={availableKinds}
               onChange={(next) => {
                 setKind(next);
                 setSelectedLesson('');
@@ -1945,7 +1958,7 @@ function NewAssignment({
             <p className="small muted">{labels.assignmentHint}</p>
           </div>
           <SearchSelect
-            key={`${groupId}:${subjectId}:${kind}`}
+            key={`${groupId}:${subjectId}:${nextKind}`}
             label={t('Занятие')}
             name="lessonId"
             required

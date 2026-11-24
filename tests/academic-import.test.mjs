@@ -77,7 +77,10 @@ async function sourceFixture(t, academic = true) {
 
 // A recording adapter verifies importer transaction/order behavior with real SQLite rows.
 // PostgreSQL-only DDL is recorded, not executed: live PostgreSQL validation remains separate.
-function recordingTarget(t, { failInstallation = false, legacyPeriodMarks = false } = {}) {
+function recordingTarget(
+  t,
+  { failInstallation = false, legacyPeriodMarks = false, unrelatedRelations = [] } = {},
+) {
   const sqlite = new DatabaseSync(':memory:');
   const events = [];
   let initialized = false;
@@ -109,6 +112,8 @@ function recordingTarget(t, { failInstallation = false, legacyPeriodMarks = fals
             .some((column) => column.name === 'exam_score')
         )
           sqlite.exec(sql.replace(' IF NOT EXISTS', ''));
+      } else if (sql.includes('REVOKE ALL PRIVILEGES')) {
+        events.push('restrict-supabase');
       } else if (sql.includes('CREATE OR REPLACE FUNCTION')) {
         events.push('install');
         assert.equal(sqlite.prepare('SELECT count(*) AS count FROM school_lessons').get().count, 3);
@@ -126,6 +131,14 @@ function recordingTarget(t, { failInstallation = false, legacyPeriodMarks = fals
       }
     },
     prepare(sql) {
+      if (sql.includes('pg_catalog.pg_class')) {
+        return {
+          async get() {
+            events.push('check-public-schema');
+            return unrelatedRelations.length ? { unrelated: 1 } : undefined;
+          },
+        };
+      }
       const statement = sqlite.prepare(sql);
       return {
         async all(...args) {
@@ -200,6 +213,47 @@ test('Importer copies academic rows before installing their rules, and repeats w
   assert.equal(
     target.sqlite.prepare("SELECT kind FROM school_lessons WHERE id='historic'").get().kind,
     'Практика',
+  );
+});
+
+test('Supabase import rejects unrelated public relations before DDL or privilege changes', async (t) => {
+  const snapshot = await readSqliteSnapshot(await sourceFixture(t, false));
+  const target = recordingTarget(t, { unrelatedRelations: ['another_application'] });
+  await assert.rejects(
+    importSqliteSnapshot(target.adapter, snapshot, { supabase: true }),
+    /посторонние.*отдельный пустой проект Supabase/,
+  );
+  assert.deepEqual(target.events, ['begin', 'check-public-schema', 'rollback']);
+  assert.equal(
+    target.sqlite.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type='table'").get()
+      .count,
+    0,
+  );
+});
+
+test('Repeated Supabase import rejects newly added unrelated relations without changing its snapshot', async (t) => {
+  const snapshot = await readSqliteSnapshot(await sourceFixture(t, false));
+  const unrelatedRelations = [];
+  const target = recordingTarget(t, { unrelatedRelations });
+  assert.equal(
+    (await importSqliteSnapshot(target.adapter, snapshot, { supabase: true })).imported,
+    true,
+  );
+  const before = target.sqlite.prepare('SELECT * FROM studyhub_settings ORDER BY key').all();
+  const previousEvents = target.events.length;
+  unrelatedRelations.push('another_application');
+  await assert.rejects(
+    importSqliteSnapshot(target.adapter, snapshot, { supabase: true }),
+    /посторонние.*отдельный пустой проект Supabase/,
+  );
+  assert.deepEqual(target.events.slice(previousEvents), [
+    'begin',
+    'check-public-schema',
+    'rollback',
+  ]);
+  assert.deepEqual(
+    target.sqlite.prepare('SELECT * FROM studyhub_settings ORDER BY key').all(),
+    before,
   );
 });
 

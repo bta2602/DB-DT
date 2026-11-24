@@ -11,6 +11,7 @@ import {
   migrateSqliteAcademic,
 } from '../database/migrations/academic-data.mjs';
 import { migratePostgresAcademic as migratePostgresAcademicRules } from '../database/migrations/academic-rules.mjs';
+import { assertMaintenanceTarget } from './postgres-target.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
@@ -32,13 +33,7 @@ export function parseAcademicTarget(args) {
     } catch {
       throw new Error('Задайте отдельную тестовую базу в STUDYHUB_ACADEMIC_TEST_DATABASE_URL.');
     }
-    if (
-      !['postgres:', 'postgresql:'].includes(url.protocol) ||
-      url.hostname !== args[2] ||
-      url.hostname.includes('-pooler.')
-    ) {
-      throw new Error('Нужен прямой PostgreSQL URL с хостом, совпадающим с --host.');
-    }
+    assertMaintenanceTarget(url, args[2]);
     return { dialect: 'postgres', connectionString };
   }
   throw new Error(

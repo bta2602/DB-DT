@@ -6,7 +6,8 @@ import { isDemoEnabled, seedDemoDataset } from '../lib/studyhub/auth-store.mjs';
 import { createDemoData } from '../database/seeds/demo-data.mjs';
 import { CAMPUS_SEED_ID, createCampusData } from '../database/seeds/campus-data.mjs';
 import { prepareCampusUpgrade, readSeedContext } from '../database/upgrade-campus.mjs';
-import { closeDatabase } from '../database/connection.mjs';
+import { closeDatabase, getDatabase } from '../database/connection.mjs';
+import { completeDemoAcademicMetadata } from '../database/seeds/demo-academic.mjs';
 
 try {
   if (process.env.DATABASE_URL) {
@@ -118,6 +119,7 @@ try {
     connection.close();
   }
   if (snapshot) await seed(snapshot, 'Учебные группы и расписание на четыре недели');
+  if (enabled) await completeDemoAcademicMetadata(await getDatabase());
 
   const reader = new DatabaseSync(filename, { readOnly: true });
   const users = new Map(

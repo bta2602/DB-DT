@@ -4,7 +4,7 @@
 
 Учебный проект на **Next.js 16, React 19 и TypeScript**. Все страницы и серверные
 API работают через Next.js App Router. Локальный сервер может подключаться к
-PostgreSQL в Neon. Для разработки и тестов доступна отдельная SQLite-база.
+PostgreSQL в Neon или Supabase. Для разработки и тестов доступна отдельная SQLite-база.
 
 ## Зачем нужен StudyHUB
 
@@ -36,6 +36,27 @@ npm ci
 npm run build
 npm start
 ```
+
+## Тестовый запуск с Supabase
+
+Supabase используется как PostgreSQL для существующего серверного API StudyHUB.
+Создайте отдельный тестовый проект, отключите **Data API** до импорта и сохраните
+его direct/session URI из **Connect** в игнорируемом `.env.supabase.local`
+как `DATABASE_URL` с `sslmode=verify-full`. С Node.js 24.x выполните:
+
+```bash
+npm ci
+npm run db:supabase:import
+```
+
+Команда готовит отдельный синтетический SQLite-набор в
+`../studyhub-data/supabase-demo/auth.sqlite` и переносит его с проверкой содержимого.
+Этот снимок повторно используется при повторах команды. Для явно выбранной резервной
+копии предусмотрен `-- --source "<абсолютный путь к auth.sqlite>"`.
+После успешного импорта задайте URI с проверкой SSL в `.env.local`, `STUDYHUB_DEMO_MODE=true`
+и `STUDYHUB_ORIGIN=http://localhost:3000`, затем выполните `npm run build` и `npm start`.
+Выбор подключения, SSL и проверка ролей описаны в
+[инструкции Supabase](docs/DEPLOYMENT.md#supabase-как-postgresql).
 
 ## Локальный запуск с SQLite
 
@@ -222,7 +243,9 @@ tests/                  Автоматическая проверка API и с�
 docs/                   Архитектура, описание API, сценарий демонстрации
 ```
 
-В облаке данные хранятся в Neon. Для SQLite каталог задаётся через `STUDYHUB_DATA_DIR` и находится за пределами исходников. Строка подключения и пароли остаются в приватных настройках.
+Для PostgreSQL в Neon или Supabase используется `DATABASE_URL`. Для SQLite каталог
+задаётся через `STUDYHUB_DATA_DIR` и находится за пределами исходников. Строка
+подключения и пароли остаются в приватных настройках.
 
 ## Команды
 
@@ -241,6 +264,9 @@ docs/                   Архитектура, описание API, сцена
 | `npm run admin:create -- admin@example.com "Имя администратора"` | Создаёт администратора для обычного режима.                                      |
 
 Команда `npm run db:import -- --source "<абсолютный путь к auth.sqlite>"` переносит подготовленную SQLite-базу в пустую PostgreSQL-базу. Подробности и ограничения — в [инструкции переноса](docs/DEPLOYMENT.md).
+
+`npm run db:supabase:import` использует `DATABASE_URL` из `.env.supabase.local`
+для первоначального заполнения тестового проекта Supabase отдельным учебным снимком.
 
 ## Обычный режим
 
@@ -276,7 +302,7 @@ GitHub хранит исходники. API приложения требует 
 
 ## Документация
 
-- [Подключение к Neon и перенос данных](docs/DEPLOYMENT.md)
+- [Подключение к Neon, Supabase и перенос данных](docs/DEPLOYMENT.md)
 - [Как показать проект учителю](docs/DEMO.md)
 - [Как связаны страницы, API и база](docs/ARCHITECTURE.md)
 - [Описание API](docs/API.md)

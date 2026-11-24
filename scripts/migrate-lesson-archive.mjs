@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { Client } from 'pg';
 import { migratePostgresLessonArchive } from '../database/migrations/lesson-archive.mjs';
+import { assertMaintenanceTarget } from './postgres-target.mjs';
 
 export function parseArchiveTarget(args, env = process.env) {
   if (args.length !== 3 || args[0] !== '--host' || args[2] !== '--apply') {
@@ -15,13 +16,7 @@ export function parseArchiveTarget(args, env = process.env) {
   } catch {
     throw new Error('Укажите прямое подключение в DATABASE_URL_UNPOOLED или DIRECT_DATABASE_URL.');
   }
-  if (
-    !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    url.hostname !== args[1] ||
-    url.hostname.includes('-pooler')
-  ) {
-    throw new Error('Нужен прямой PostgreSQL URL с хостом, совпадающим с --host.');
-  }
+  assertMaintenanceTarget(url, args[1]);
   return { connectionString };
 }
 

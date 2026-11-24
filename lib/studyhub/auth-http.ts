@@ -23,6 +23,7 @@ import {
   saveSubmission,
   isDemoEnabled,
   signInDemo,
+  runAuthRequest,
   saveMaterial,
   deleteMaterial,
   saveAnnouncement,
@@ -104,7 +105,7 @@ function writeCookie(
 async function execute(request: NextRequest, action: () => NextResponse | Promise<NextResponse>) {
   try {
     expectedOrigin(request);
-    return await action();
+    return await runAuthRequest(action);
   } catch (error) {
     if (error instanceof AuthError) {
       const response = json(

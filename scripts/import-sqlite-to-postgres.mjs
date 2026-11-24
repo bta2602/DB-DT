@@ -42,12 +42,13 @@ const temporaryTables = ['auth_sessions', 'auth_limits'];
 // Earlier backups predate the academic extension and separate semester marks.
 const optionalTables = ['school_academic_seed_map', 'school_period_marks'];
 const allTables = [...importedTables, ...optionalTables, ...temporaryTables];
+const applicationViews = ['school_academic_lessons', 'school_academic_groups'];
 
 function snapshotTableNames(tables) {
   return [...importedTables, ...optionalTables.filter((name) => tables[name])];
 }
 
-class ImportError extends Error {}
+export class ImportError extends Error {}
 
 function identifier(name) {
   if (!/^[a-z][a-z0-9_]*$/.test(name)) {
@@ -279,15 +280,51 @@ async function verifyTarget(db, snapshot) {
   }
 }
 
-export async function importSqliteSnapshot(db, snapshot) {
+async function assertSupabaseSchema(db) {
+  const unrelated = await db
+    .prepare(
+      `SELECT 1 AS unrelated
+       FROM pg_catalog.pg_class AS relation
+       JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid=relation.relnamespace
+       WHERE namespace.nspname='public'
+         AND relation.relkind NOT IN ('i','I','t')
+         AND NOT (
+           (relation.relkind='r' AND relation.relname=ANY(?::text[]))
+           OR (relation.relkind='v' AND relation.relname=ANY(?::text[]))
+         )
+       LIMIT 1`,
+    )
+    .get(allTables, applicationViews);
+  if (unrelated) {
+    throw new ImportError(
+      'Схема public содержит посторонние таблицы, представления или другие отношения, включая объекты расширений. Используйте отдельный пустой проект Supabase для StudyHUB.',
+    );
+  }
+}
+
+async function restrictSupabaseAccess(db) {
+  await db.exec(`
+    REVOKE ALL PRIVILEGES ON SCHEMA public FROM PUBLIC, anon, authenticated;
+    REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM PUBLIC, anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON TABLES FROM PUBLIC, anon, authenticated;
+  `);
+}
+
+export async function importSqliteSnapshot(db, snapshot, { supabase = false } = {}) {
   if (db.dialect !== 'postgres') {
     throw new ImportError('Для переноса необходима PostgreSQL-база в DATABASE_URL.');
   }
   // CREATE IF NOT EXISTS adds schema objects; it never clears existing records.
-  await db.exec(postgresSchema);
+  if (!supabase) await db.exec(postgresSchema);
   return db.transaction(async (tx) => {
+    // Broad schema grants must never be changed on a shared project, including
+    // extension-owned relations. Check repeats before making any schema changes too.
+    if (supabase) await assertSupabaseSchema(tx);
+    // The Supabase schema and its revoked grants become visible in the same commit.
+    if (supabase) await tx.exec(postgresSchema);
     await tx.exec(periodExamScoreUpgrade);
     await tx.exec(academicSeedMapSchema);
+    if (supabase) await restrictSupabaseAccess(tx);
     const marker = await tx
       .prepare('SELECT value FROM studyhub_settings WHERE key=?')
       .get(markerKey);
@@ -332,6 +369,8 @@ export async function importSqliteSnapshot(db, snapshot) {
     if (snapshot.tables.studyhub_settings.rows.some((row) => row.key === academicMigrationKey)) {
       await installPostgresAcademicDataObjects({ query: (sql) => tx.exec(sql) });
     }
+    // Academic installation creates views after the initial table revocation.
+    if (supabase) await restrictSupabaseAccess(tx);
     await tx
       .prepare('INSERT INTO studyhub_settings(key,value) VALUES (?,?)')
       .run(markerKey, JSON.stringify(snapshot.manifest));

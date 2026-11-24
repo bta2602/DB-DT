@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { Client } from 'pg';
 import { migratePostgresEveningSlots } from '../database/migrations/evening-slots.mjs';
+import { assertMaintenanceTarget } from './postgres-target.mjs';
 
 export async function main(args = process.argv.slice(2)) {
   if (args.length !== 3 || args[0] !== '--host' || args[2] !== '--apply')
@@ -14,12 +15,7 @@ export async function main(args = process.argv.slice(2)) {
   } catch {
     throw new Error('Set DATABASE_URL_UNPOOLED to a direct PostgreSQL connection.');
   }
-  if (
-    !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    url.hostname !== args[1] ||
-    url.hostname.includes('-pooler')
-  )
-    throw new Error('Expected direct PostgreSQL hostname does not match --host.');
+  assertMaintenanceTarget(url, args[1]);
   const client = new Client({ connectionString, connectionTimeoutMillis: 15000 });
   try {
     await client.connect();

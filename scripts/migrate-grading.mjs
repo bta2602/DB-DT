@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { Client } from 'pg';
 import { migratePostgresGrading } from '../database/migrations/grading-100.mjs';
+import { assertMaintenanceTarget } from './postgres-target.mjs';
 
 export async function main(args = process.argv.slice(2)) {
   const expectedHost = args[1];
@@ -19,15 +20,7 @@ export async function main(args = process.argv.slice(2)) {
   } catch {
     throw new Error('Нужен прямой адрес PostgreSQL в DATABASE_URL_UNPOOLED.');
   }
-  if (
-    !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    url.hostname !== expectedHost ||
-    url.hostname.includes('-pooler.')
-  ) {
-    throw new Error(
-      'Хост не совпадает с --host или указан pooled URL. Используйте проверенное прямое подключение.',
-    );
-  }
+  assertMaintenanceTarget(url, expectedHost);
   const client = new Client({ connectionString, connectionTimeoutMillis: 15000 });
   try {
     await client.connect();

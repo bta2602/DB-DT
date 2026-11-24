@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { Client } from 'pg';
 import { migratePostgresPeriodMarks } from '../database/migrations/period-marks.mjs';
+import { assertMaintenanceTarget } from './postgres-target.mjs';
 
 export async function main(args = process.argv.slice(2), env = process.env) {
   const [hostFlag, host, applyFlag] = args;
@@ -15,12 +16,7 @@ export async function main(args = process.argv.slice(2), env = process.env) {
   } catch {
     throw new Error('Укажите DATABASE_URL_UNPOOLED или DIRECT_DATABASE_URL.');
   }
-  if (
-    !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    url.hostname !== host ||
-    url.hostname.includes('-pooler')
-  )
-    throw new Error('Нужен прямой PostgreSQL URL с хостом, совпадающим с --host.');
+  assertMaintenanceTarget(url, host);
   const client = new Client({ connectionString, connectionTimeoutMillis: 15000 });
   try {
     await client.connect();

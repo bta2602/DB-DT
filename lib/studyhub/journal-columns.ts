@@ -62,10 +62,12 @@ export function journalColumns(
 }
 
 /** Use the college's local calendar date for timestamps near midnight. */
-export function journalDate(value: string) {
+export function journalDate(value: string, includeYear = false) {
   if (!value || !Number.isFinite(Date.parse(value))) return '—';
-  const [, month, day] = (/^\d{4}-\d{2}-\d{2}$/.test(value) ? value : dateKey(value)).split('-');
-  return `${day}.${month}`;
+  const [year, month, day] = (/^\d{4}-\d{2}-\d{2}$/.test(value) ? value : dateKey(value)).split(
+    '-',
+  );
+  return includeYear ? `${day}.${month}.${year}` : `${day}.${month}`;
 }
 
 export function journalStudentName(user: {

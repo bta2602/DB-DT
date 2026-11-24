@@ -199,6 +199,8 @@ export const dictionary: Record<string, readonly [kk: string, en: string]> = {
   Начало: ['Басталуы', 'Start'],
   Окончание: ['Аяқталуы', 'End'],
   'Тип занятия': ['Сабақ түрі', 'Class type'],
+  'Сведения о занятии': ['Сабақ туралы мәлімет', 'Class details'],
+  'Сведения о задании': ['Тапсырма туралы мәлімет', 'Assignment details'],
   'Лекция, практика…': ['Дәріс, практика…', 'Lecture, practical class…'],
   Примечание: ['Ескертпе', 'Note'],
   'Восстановить занятие': ['Сабақты қалпына келтіру', 'Restore class'],

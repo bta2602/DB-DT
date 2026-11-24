@@ -690,6 +690,7 @@ function JournalContent({
   const [highlight, setHighlight] = useState(Boolean(linkedRecord));
   const [sort, setSort] = useState<SortState>({ key: 'name', direction: 'asc' });
   const [mode, setMode] = useState<JournalMode | 'period'>('all');
+  const [infoKey, setInfoKey] = useState<string | null>(null);
   const modeLabels = journalModeLabels[locale];
   const ui = lessonToolsLabels[locale];
   useEffect(() => {
@@ -742,9 +743,18 @@ function JournalContent({
     const category = academicTypeLabel(column.category, locale);
     return {
       ...column,
+      categoryLabel: category,
       label: column.title ? `${category} · ${column.title}` : category,
     };
   });
+  const infoColumn = infoKey
+    ? columns.find((column) => column.kind + ':' + column.id === infoKey)
+    : undefined;
+  const infoLesson =
+    infoColumn?.kind === 'lesson'
+      ? scope.historyLessons.find((lesson) => lesson.id === infoColumn.id)
+      : undefined;
+  const schedule = infoLesson && lessonSchedule(infoLesson, data.lessons);
   const grades = new Map(
     data.grades.map((grade) => [`${grade.lessonId}:${grade.studentId}`, grade]),
   );
@@ -942,16 +952,46 @@ function JournalContent({
                         sort={sort}
                         onSort={(key) => setSort(nextSort(sort, key))}
                       />
-                      {columns.map((column) => (
-                        <SortHeading
-                          key={column.kind + column.id}
-                          label={journalDate(column.date) + ' · ' + column.label}
-                          detail={column.date + ' · ' + column.label}
-                          column={column.kind + ':' + column.id}
-                          sort={sort}
-                          onSort={(key) => setSort(nextSort(sort, key))}
-                        />
-                      ))}
+                      {columns.map((column) => {
+                        const key = column.kind + ':' + column.id;
+                        const day = journalDate(column.date);
+                        const label = [
+                          day,
+                          column.date.includes('T') && formatTime(column.date),
+                          column.label,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ');
+                        const infoLabel = t(
+                          column.kind === 'lesson' ? 'Сведения о занятии' : 'Сведения о задании',
+                        );
+                        return (
+                          <SortHeading
+                            key={key}
+                            label={label}
+                            column={key}
+                            sort={sort}
+                            onSort={(key) => setSort(nextSort(sort, key))}
+                            action={
+                              <button
+                                type="button"
+                                className="journal-info-button"
+                                aria-haspopup="dialog"
+                                aria-label={`${infoLabel} · ${label}`}
+                                title={infoLabel}
+                                onClick={() => setInfoKey(key)}
+                              >
+                                <Icon name="info" className="sm" />
+                              </button>
+                            }
+                          >
+                            <span className="journal-column-label">
+                              <time dateTime={column.date}>{day}</time>
+                              <span>{column.categoryLabel}</span>
+                            </span>
+                          </SortHeading>
+                        );
+                      })}
                       <SortHeading
                         label={t('Средний балл')}
                         column="average"
@@ -1070,6 +1110,57 @@ function JournalContent({
             </p>
           )}
         </>
+      )}
+      {infoColumn && (
+        <Modal
+          title={t(infoColumn.kind === 'lesson' ? 'Сведения о занятии' : 'Сведения о задании')}
+          onClose={() => setInfoKey(null)}
+        >
+          <dl className="journal-column-details">
+            <dt>{t('Предмет')}</dt>
+            <dd>{title(data.subjects, subjectId)}</dd>
+            <dt>{t('Группа')}</dt>
+            <dd>{title(data.groups, groupId)}</dd>
+            <dt>{t('Тип занятия')}</dt>
+            <dd>{infoColumn.categoryLabel}</dd>
+            {infoColumn.kind === 'assignment' && (
+              <>
+                <dt>{t('Название задания')}</dt>
+                <dd>{infoColumn.title}</dd>
+              </>
+            )}
+            <dt>{t(infoColumn.kind === 'assignment' ? 'Срок сдачи (UTC+5)' : 'Дата')}</dt>
+            <dd>
+              <time dateTime={infoColumn.date}>
+                {journalDate(infoColumn.date, true)}
+                {infoColumn.kind === 'assignment' &&
+                  infoColumn.date.includes('T') &&
+                  ` · ${formatTime(infoColumn.date)}`}
+              </time>
+            </dd>
+            {schedule?.startsAt && (
+              <>
+                <dt>{t('Время занятия')}</dt>
+                <dd>
+                  {formatTime(schedule.startsAt)}
+                  {schedule.endsAt && `–${formatTime(schedule.endsAt)}`}
+                </dd>
+              </>
+            )}
+            {schedule?.roomId && (
+              <>
+                <dt>{t('Аудитория')}</dt>
+                <dd>{title(data.rooms, schedule.roomId)}</dd>
+              </>
+            )}
+            {infoLesson?.note && (
+              <>
+                <dt>{t('Примечание')}</dt>
+                <dd>{infoLesson.note}</dd>
+              </>
+            )}
+          </dl>
+        </Modal>
       )}
       {editingLesson && editingStudent && (
         <GradeEditor

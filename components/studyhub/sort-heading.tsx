@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import type { SortState } from '@/lib/studyhub/table-sort';
 import { useI18n } from './preferences';
 import { Icon } from './shared';
@@ -13,12 +14,16 @@ const labels = {
 export function SortHeading({
   label,
   detail,
+  children,
+  action,
   column,
   sort,
   onSort,
 }: {
   label: string;
   detail?: string;
+  children?: ReactNode;
+  action?: ReactNode;
   column: string;
   sort: SortState;
   onSort: (key: string) => void;
@@ -27,21 +32,31 @@ export function SortHeading({
   const active = sort.key === column;
   const next = active && sort.direction === 'asc' ? 'desc' : 'asc';
   const icon = active ? (sort.direction === 'asc' ? 'arrowUp' : 'arrowDown') : 'sort';
+  const sortButton = (
+    <button
+      type="button"
+      className="sort-heading"
+      onClick={() => onSort(column)}
+      aria-label={`${label}: ${labels[locale][next]}`}
+      title={detail}
+    >
+      {children ?? label}
+      <Icon name={icon} className="sm" />
+    </button>
+  );
   return (
     <th
       scope="col"
       aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <button
-        type="button"
-        className="sort-heading"
-        onClick={() => onSort(column)}
-        aria-label={`${label}: ${labels[locale][next]}`}
-        title={detail}
-      >
-        {label}
-        <Icon name={icon} className="sm" />
-      </button>
+      {action ? (
+        <div className="sort-heading-actions">
+          {sortButton}
+          {action}
+        </div>
+      ) : (
+        sortButton
+      )}
     </th>
   );
 }

@@ -85,6 +85,7 @@ test('archived lesson marks and imported direct SRSP marks remain accessible but
 test('journal uses DD.MM in the college timezone and puts the family name first', () => {
   assert.equal(journalDate('2026-11-30'), '30.11');
   assert.equal(journalDate('2026-11-29T20:00:00Z'), '30.11');
+  assert.equal(journalDate('2026-12-31T20:00:00Z', true), '01.01.2027');
   assert.equal(journalDate('2026-01-02T05:00:00Z'), '02.01');
   assert.equal(journalDate('invalid'), '—');
   assert.equal(

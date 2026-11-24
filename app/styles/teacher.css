@@ -683,6 +683,106 @@
 .teacher-assignment-card .card-actions .button {
   font-size: 10px;
 }
+.teacher-assignment-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.teacher-assignment-heading {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.teacher-assignment-card .teacher-assignment-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.teacher-assignment-counts small {
+  overflow-wrap: anywhere;
+}
+.studyhub-dialog.assignment-create-dialog {
+  width: min(760px, calc(100% - 24px));
+}
+.assignment-create-form {
+  display: grid;
+  gap: 20px;
+}
+.assignment-create-section {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.assignment-create-section legend {
+  padding-inline: 6px;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.assignment-create-section .field {
+  min-width: 0;
+  margin: 0;
+}
+.assignment-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.assignment-create-type {
+  display: grid;
+  gap: 8px;
+}
+.assignment-create-type > span {
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+.assignment-create-type .lesson-kind-tabs {
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+}
+.assignment-create-context {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--green);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.assignment-create-context > .icon {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+.assignment-create-context p {
+  margin-top: 4px;
+}
+.assignment-create-form .assignment-create-actions {
+  margin: 0;
+  padding-top: 0;
+  border: 0;
+}
+@media (max-width: 600px) {
+  .assignment-create-section {
+    padding: 14px;
+  }
+  .assignment-create-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .teacher-assignment-card .teacher-assignment-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .assignment-create-actions .button {
+    flex: 1 1 auto;
+  }
+}
 .teacher-empty-cell {
   font-size: 10px;
   color: #a3ad99;

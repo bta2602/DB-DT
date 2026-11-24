@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type {
   Assignment,
   Grade,
@@ -52,6 +52,7 @@ import { SearchSelect } from './search-select';
 import { lessonToolsLabels } from '@/lib/studyhub/lesson-tools-labels';
 import { nextSort, sortRows, type SortState } from '@/lib/studyhub/table-sort';
 import { SortHeading } from './sort-heading';
+import { PeriodJournal } from './period-marks';
 import { reviewedJournalTarget, reviewJournalHref } from '@/lib/studyhub/review-journal';
 import { assessmentKind, recognizedAssessmentKind } from '@/lib/studyhub/assessment-kind.mjs';
 import {
@@ -688,7 +689,7 @@ function JournalContent({
   const highlightRef = useRef<HTMLTableCellElement>(null);
   const [highlight, setHighlight] = useState(Boolean(linkedRecord));
   const [sort, setSort] = useState<SortState>({ key: 'name', direction: 'asc' });
-  const [mode, setMode] = useState<JournalMode>('all');
+  const [mode, setMode] = useState<JournalMode | 'period'>('all');
   const modeLabels = journalModeLabels[locale];
   const ui = lessonToolsLabels[locale];
   useEffect(() => {
@@ -736,7 +737,7 @@ function JournalContent({
     scope.historyLessons.filter(inSubject),
     scope.assignments.filter(inSubject),
     data.grades,
-    mode,
+    mode === 'period' ? 'all' : mode,
   ).map((column) => {
     const category = academicTypeLabel(column.category, locale);
     return {
@@ -817,14 +818,16 @@ function JournalContent({
         title={t('Журнал группы')}
         description={t('Оценки и отметки в одной таблице.')}
         action={
-          <button
-            type="button"
-            className="button"
-            disabled={!columns.length || !visibleStudents.length}
-            onClick={exportJournal}
-          >
-            {exportLabel}
-          </button>
+          mode !== 'period' && (
+            <button
+              type="button"
+              className="button"
+              disabled={!columns.length || !visibleStudents.length}
+              onClick={exportJournal}
+            >
+              {exportLabel}
+            </button>
+          )
         }
       />
       {linkedRecord && (
@@ -853,7 +856,7 @@ function JournalContent({
       ) : (
         <>
           <div className="tabs journal-modes mb" role="group" aria-label={modeLabels.group}>
-            {journalModes.map((value) => (
+            {([...journalModes, 'period'] as const).map((value) => (
               <button
                 type="button"
                 key={value}
@@ -864,7 +867,7 @@ function JournalContent({
                   setSort({ key: 'name', direction: 'asc' });
                 }}
               >
-                {modeLabels[value]}
+                {value === 'period' ? t('РК и рейтинги') : modeLabels[value]}
               </button>
             ))}
           </div>
@@ -903,7 +906,14 @@ function JournalContent({
               />
             </Field>
           </TeacherFilterPanel>
-          {!columns.length ? (
+          {mode === 'period' ? (
+            <PeriodJournal
+              key={groupId + ':' + subjectId}
+              groupId={groupId}
+              subjectId={subjectId}
+              students={visibleStudents}
+            />
+          ) : !columns.length ? (
             <EmptyState
               title={t('Нет занятий или заданий')}
               description={t('Они появятся после добавления в расписание или создания задания.')}
@@ -1052,11 +1062,13 @@ function JournalContent({
               </div>
             </section>
           )}
-          <p className="journal-help">
-            {t(
-              'Нажмите ячейку занятия, чтобы изменить отметку. Ячейка задания открывает проверку работы.',
-            )}
-          </p>
+          {mode !== 'period' && (
+            <p className="journal-help">
+              {t(
+                'Нажмите ячейку занятия, чтобы изменить отметку. Ячейка задания открывает проверку работы.',
+              )}
+            </p>
+          )}
         </>
       )}
       {editingLesson && editingStudent && (
@@ -1748,41 +1760,75 @@ function ReviewContent({
 function NewAssignment({
   onClose,
   onCreated,
+  initialGroupId,
+  initialSubjectId,
+  initialType,
 }: {
   onClose: () => void;
   onCreated: (groupId: string) => void;
+  initialGroupId: string;
+  initialSubjectId: string;
+  initialType: string;
 }) {
   const { t, locale } = useI18n();
   const { data, user, mutate, notify, now } = useStudyHub();
   const scope = teacherScope(data, user);
   const labels = lessonFormLabels[locale];
-  const [kind, setKind] = useState<'lecture' | 'practice' | 'srsp'>('lecture');
-  const [groupId, setGroupId] = useState(scope.groups[0]?.id || '');
-  const [selectedSubject, setSelectedSubject] = useState('');
+  const fieldId = useId();
+  const [kind, setKind] = useState<'lecture' | 'practice' | 'srsp'>(
+    formLessonKind(initialType) || 'lecture',
+  );
+  const [groupId, setGroupId] = useState(
+    scope.groups.some((group) => group.id === initialGroupId)
+      ? initialGroupId
+      : scope.groups.length === 1
+        ? scope.groups[0].id
+        : '',
+  );
+  const [selectedSubject, setSelectedSubject] = useState(initialSubjectId);
   const subjects = scope.subjects(groupId);
   const subjectId = subjects.some((subject) => subject.id === selectedSubject)
     ? selectedSubject
-    : subjects[0]?.id || '';
+    : subjects.length === 1
+      ? subjects[0].id
+      : '';
   const [selectedLesson, setSelectedLesson] = useState('');
-  const lessons = scope.lessons.filter((lesson) => {
-    if (lesson.groupId !== groupId || lesson.subjectId !== subjectId) return false;
-    if (lesson.status !== 'scheduled' || formLessonKind(lesson.kind) !== kind) return false;
-    if (
-      kind === 'srsp' &&
-      !data.lessons.some(
-        (practice) =>
-          practice.id === lesson.practiceId &&
-          practice.status === 'scheduled' &&
-          formLessonKind(practice.kind) === 'practice',
+  const plannedLessons = scope.lessons.filter(
+    (lesson) =>
+      lesson.groupId === groupId &&
+      lesson.subjectId === subjectId &&
+      lesson.status === 'scheduled' &&
+      formLessonKind(lesson.kind) === kind,
+  );
+  const lessons = plannedLessons
+    .filter((lesson) => {
+      if (
+        kind === 'srsp' &&
+        !data.lessons.some(
+          (practice) =>
+            practice.id === lesson.practiceId &&
+            practice.status === 'scheduled' &&
+            !practice.archivedAt &&
+            practice.groupId === groupId &&
+            practice.subjectId === subjectId &&
+            formLessonKind(practice.kind) === 'practice',
+        )
       )
-    )
-      return false;
-    return (
-      subjectsForDate(data, groupId, lesson.date).some((subject) => subject.id === subjectId) &&
-      teachersForSubject(data, groupId, subjectId).some((teacher) => teacher.id === user?.id)
+        return false;
+      return (
+        subjectsForDate(data, groupId, lesson.date).some((subject) => subject.id === subjectId) &&
+        teachersForSubject(data, groupId, subjectId).some((teacher) => teacher.id === user?.id)
+      );
+    })
+    .sort((first, second) =>
+      lessonSortKey(first, data.lessons).localeCompare(lessonSortKey(second, data.lessons)),
     );
-  });
-  const linkedLesson = lessons.find((lesson) => lesson.id === selectedLesson) || lessons[0];
+  const linkedLesson =
+    lessons.find((lesson) => lesson.id === selectedLesson) ||
+    (lessons.length === 1 ? lessons[0] : undefined);
+  const linkedSchedule = linkedLesson ? lessonSchedule(linkedLesson, data.lessons) : null;
+  const missingConfiguration =
+    'Для публикации задания администратору нужно настроить учебный план группы, язык обучения и специализацию преподавателя.';
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState('');
@@ -1790,7 +1836,11 @@ function NewAssignment({
     event.preventDefault();
     if (lock.current || !user) return;
     if (!linkedLesson) {
-      setError('Для задания нужно опубликованное занятие по выбранному предмету.');
+      setError(
+        plannedLessons.length && !lessons.length
+          ? missingConfiguration
+          : 'Для задания нужно опубликованное занятие по выбранному предмету.',
+      );
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -1809,6 +1859,14 @@ function NewAssignment({
       setError('Заполните название, условия и будущий срок сдачи.');
       return;
     }
+    const steps = value('steps')
+      .split('\n')
+      .map((step) => step.trim())
+      .filter(Boolean);
+    if (steps.length > 50 || steps.some((step) => step.length > 500)) {
+      setError('Укажите до 50 этапов, до 500 символов в каждом и до 3000 суммарно.');
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -1816,10 +1874,7 @@ function NewAssignment({
       await mutate('POST', '/api/assignments', {
         title: value('title'),
         description: value('description'),
-        steps: value('steps')
-          .split('\n')
-          .map((step) => step.trim())
-          .filter(Boolean),
+        steps,
         lessonId: linkedLesson.id,
         groupId,
         subjectId,
@@ -1838,114 +1893,155 @@ function NewAssignment({
   return (
     <Modal
       title={t('Создать задание')}
-      onClose={() => {
-        if (!busy) onClose();
-      }}
+      className="assignment-create-dialog"
+      onClose={onClose}
+      closeDisabled={busy}
     >
-      <form onSubmit={submit}>
-        <Field label={t('Название')}>
-          <input
-            name="title"
-            required
-            maxLength={120}
-            placeholder={t('Название задания')}
-            disabled={busy}
-          />
-        </Field>
-        <div className="form-row">
+      <form onSubmit={submit} className="assignment-create-form" aria-busy={busy}>
+        <fieldset disabled={busy} className="assignment-create-section">
+          <legend>{t('Группа и занятие')}</legend>
+          <div className="assignment-create-grid">
+            <SearchSelect
+              label={t('Группа')}
+              name="groupId"
+              options={scope.groups}
+              value={groupId}
+              required
+              placeholder={labels.choose}
+              onChange={(value) => {
+                setGroupId(value);
+                setSelectedSubject('');
+                setSelectedLesson('');
+                setError('');
+              }}
+            />
+            <SearchSelect
+              key={groupId}
+              label={t('Предмет')}
+              name="subjectId"
+              options={subjects}
+              value={subjectId}
+              required
+              disabled={!groupId}
+              placeholder={labels.choose}
+              onChange={(value) => {
+                setSelectedSubject(value);
+                setSelectedLesson('');
+                setError('');
+              }}
+            />
+          </div>
+          <div className="assignment-create-type">
+            <span>{labels.assignmentType}</span>
+            <LessonTypeButtons
+              value={kind}
+              onChange={(next) => {
+                setKind(next);
+                setSelectedLesson('');
+                setError('');
+              }}
+              label={labels.assignmentType}
+            />
+            <p className="small muted">{labels.assignmentHint}</p>
+          </div>
           <SearchSelect
-            label={t('Группа')}
-            name="groupId"
-            options={scope.groups}
-            value={groupId}
+            key={`${groupId}:${subjectId}:${kind}`}
+            label={t('Занятие')}
+            name="lessonId"
             required
-            disabled={busy}
+            value={linkedLesson?.id || ''}
+            disabled={!subjectId || !lessons.length}
+            options={lessons.map((lesson) => ({
+              id: lesson.id,
+              name:
+                formatDate(lessonSchedule(lesson, data.lessons).date, locale) +
+                ' · ' +
+                formatTime(lessonSchedule(lesson, data.lessons).startsAt) +
+                ' · ' +
+                t(lessonKindLabel(lesson.kind)),
+            }))}
             placeholder={labels.choose}
             onChange={(value) => {
-              setGroupId(value);
-              setSelectedSubject('');
-              setSelectedLesson('');
+              setSelectedLesson(value);
+              setError('');
             }}
           />
-          <SearchSelect
-            label={t('Предмет')}
-            name="subjectId"
-            options={subjects}
-            value={subjectId}
-            required
-            disabled={busy}
-            placeholder={labels.choose}
-            onChange={(value) => {
-              setSelectedSubject(value);
-              setSelectedLesson('');
-            }}
-          />
-        </div>
-        <div className="form-row">
-          <Field label={t('Срок сдачи (UTC+5)')}>
-            <input type="datetime-local" name="dueAt" required disabled={busy} />
+          {subjectId && !lessons.length && (
+            <p className="small muted" role="status">
+              {plannedLessons.length ? t(missingConfiguration) : labels.noLessons}
+            </p>
+          )}
+          {linkedLesson && linkedSchedule && (
+            <div className="assignment-create-context" role="status">
+              <Icon name="calendar" className="sm" />
+              <div>
+                <strong>
+                  {title(data.groups, groupId)} · {title(data.subjects, subjectId)}
+                </strong>
+                <p>
+                  {formatDate(linkedSchedule.date, locale)} · {formatTime(linkedSchedule.startsAt)}
+                  {linkedSchedule.roomId &&
+                    ` · ${t('Аудитория')} ${title(data.rooms, linkedSchedule.roomId)}`}
+                </p>
+                {linkedLesson.kind === 'srsp' && <p>{lessonToolsLabels[locale].inherited}</p>}
+              </div>
+            </div>
+          )}
+        </fieldset>
+        <fieldset disabled={busy} className="assignment-create-section">
+          <legend>{t('Содержание задания')}</legend>
+          <Field label={t('Название задания')}>
+            <input name="title" required maxLength={120} placeholder={t('Название задания')} />
           </Field>
-        </div>
-        <LessonTypeButtons
-          value={kind}
-          onChange={(next) => {
-            setKind(next);
-            setSelectedLesson('');
-          }}
-          label={labels.assignmentType}
-          disabled={busy}
-        />
-        <p className="small muted">{labels.assignmentHint}</p>
-        <SearchSelect
-          label={t('Занятие')}
-          name="lessonId"
-          required
-          value={linkedLesson?.id || ''}
-          disabled={busy || !lessons.length}
-          options={lessons.map((lesson) => ({
-            id: lesson.id,
-            name:
-              formatDate(lessonDay(lesson), locale) +
-              ' · ' +
-              formatTime(lessonSchedule(lesson, data.lessons).startsAt) +
-              ' · ' +
-              t(lessonKindLabel(lesson.kind)),
-          }))}
-          placeholder={labels.choose}
-          onChange={setSelectedLesson}
-        />
-        {!lessons.length && <p className="small muted">{labels.noLessons}</p>}
-        {linkedLesson?.kind === 'srsp' && (
-          <p className="small muted">{lessonToolsLabels[locale].inherited}</p>
-        )}
-        <Field label={t('Условия выполнения')}>
-          <textarea
-            name="description"
-            required
-            maxLength={3000}
-            disabled={busy}
-            placeholder={t('Что нужно сделать и какой результат приложить')}
-          />
-        </Field>
-        <Field label={t('Этапы выполнения')}>
-          <textarea
-            name="steps"
-            maxLength={3000}
-            disabled={busy}
-            placeholder={t('Один этап на строку')}
-          />
-        </Field>
+          <Field label={t('Условия выполнения')}>
+            <textarea
+              name="description"
+              required
+              maxLength={3000}
+              rows={5}
+              placeholder={t('Что нужно сделать и какой результат приложить')}
+            />
+          </Field>
+          <Field label={t('Этапы выполнения')}>
+            <textarea
+              name="steps"
+              maxLength={3000}
+              rows={3}
+              aria-describedby={`${fieldId}-steps`}
+              placeholder={t('Один этап на строку')}
+            />
+            <small id={`${fieldId}-steps`}>
+              {t(
+                'Этапы необязательны. До 50 этапов, каждый с новой строки. До 500 символов на этап и 3000 суммарно.',
+              )}
+            </small>
+          </Field>
+        </fieldset>
+        <fieldset disabled={busy} className="assignment-create-section">
+          <legend>{t('Срок и публикация')}</legend>
+          <Field label={t('Срок сдачи (UTC+5)')}>
+            <input
+              type="datetime-local"
+              name="dueAt"
+              required
+              aria-describedby={`${fieldId}-deadline`}
+            />
+            <small id={`${fieldId}-deadline`}>
+              {t('Укажите будущую дату и время по часовому поясу колледжа (UTC+5).')}
+            </small>
+          </Field>
+        </fieldset>
         {error && (
           <p className="error-text" role="alert">
             {t(error)}
           </p>
         )}
-        <div className="form-actions">
+        <div className="form-actions assignment-create-actions">
           <button type="button" className="button" disabled={busy} onClick={onClose}>
             {t('Отмена')}{' '}
           </button>
           <button type="submit" className="button primary" disabled={busy || !linkedLesson}>
-            {busy ? t('Создание…') : t('Создать задание')}
+            {busy ? t('Создание…') : t('Опубликовать задание')}
           </button>
         </div>
       </form>
@@ -1966,6 +2062,10 @@ export function AssignmentsPage() {
       (!filters.groupId || assignment.groupId === filters.groupId) &&
       (!filters.subjectId || assignment.subjectId === filters.subjectId) &&
       (!filters.type || assignment.type === filters.type) &&
+      (!filters.query.trim() ||
+        assignment.title
+          .toLocaleLowerCase(locale)
+          .includes(filters.query.trim().toLocaleLowerCase(locale))) &&
       teacherDeadlineMatches(assignment.dueAt, filters.deadline, now) &&
       (filters.status === 'all' ||
         scope.records.some(
@@ -2002,15 +2102,27 @@ export function AssignmentsPage() {
           resetKey={storage.resetKey}
           update={storage.update}
           kinds={scope.assignments.map((assignment) => assignment.type)}
+          afterSubject={
+            <Field label={t('Поиск задания')}>
+              <input
+                type="search"
+                value={filters.query}
+                placeholder={t('Найти задание…')}
+                onChange={(event) => storage.update({ query: event.target.value })}
+              />
+            </Field>
+          }
         />
       </TeacherFilterPanel>
       {!assignments.length ? (
         <EmptyState
-          title={t('Заданий пока нет')}
+          title={scope.assignments.length ? t('Задания не найдены') : t('Заданий пока нет')}
           description={
-            scope.pairs.length
-              ? t('Создайте задание для своей группы.')
-              : t('Администратор ещё не назначил вам группы и предметы.')
+            scope.assignments.length
+              ? t('Измените поисковый запрос или фильтры.')
+              : scope.pairs.length
+                ? t('Создайте задание для своей группы.')
+                : t('Администратор ещё не назначил вам группы и предметы.')
           }
         />
       ) : (
@@ -2022,7 +2134,10 @@ export function AssignmentsPage() {
             return (
               <article className="card teacher-assignment-card" key={assignment.id}>
                 <header className="teacher-assignment-heading">
-                  <Badge kind="neutral">{title(data.groups, assignment.groupId)}</Badge>
+                  <div className="teacher-assignment-labels">
+                    <Badge kind="neutral">{title(data.groups, assignment.groupId)}</Badge>
+                    <Badge>{t(academicTypeLabel(assignment.type, locale))}</Badge>
+                  </div>
                   <h2>{assignment.title}</h2>
                   <p>
                     {title(data.subjects, assignment.subjectId)} {t('· до')}{' '}
@@ -2030,17 +2145,20 @@ export function AssignmentsPage() {
                   </p>
                 </header>
                 <div className="teacher-assignment-counts">
-                  {(['submitted', 'reviewed', 'missing'] as WorkStatus[]).map((status) => (
-                    <div key={status}>
-                      <strong>
-                        {
-                          records.filter((record) => (record.work?.status || 'missing') === status)
-                            .length
-                        }
-                      </strong>
-                      <small>{t(workLabels[status])}</small>
-                    </div>
-                  ))}
+                  {(['submitted', 'reviewed', 'revision', 'missing'] as WorkStatus[]).map(
+                    (status) => (
+                      <div key={status}>
+                        <strong>
+                          {
+                            records.filter(
+                              (record) => (record.work?.status || 'missing') === status,
+                            ).length
+                          }
+                        </strong>
+                        <small>{t(workLabels[status])}</small>
+                      </div>
+                    ),
+                  )}
                 </div>
                 <div className="card-actions">
                   <button
@@ -2065,6 +2183,9 @@ export function AssignmentsPage() {
       <MaterialsPanel />
       {creating && (
         <NewAssignment
+          initialGroupId={filters.groupId}
+          initialSubjectId={filters.subjectId}
+          initialType={filters.type}
           onClose={() => setCreating(false)}
           onCreated={(id) => {
             setCreating(false);

@@ -889,3 +889,31 @@ th[aria-sort='descending'] .sort-heading {
     flex: 1 1 auto;
   }
 }
+.period-journal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.period-journal-head > div:first-child {
+  flex: 1 1 16rem;
+}
+.period-journal-head .field {
+  margin: 0;
+}
+.period-caption {
+  padding: 1rem;
+  text-align: start;
+  font-weight: 600;
+}
+.period-final-grade {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: var(--control-surface);
+  color: var(--ink);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}

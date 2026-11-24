@@ -19,6 +19,7 @@ import {
   saveAssignment,
   saveAttendance,
   saveGrade,
+  savePeriodMarks,
   saveSubmission,
   isDemoEnabled,
   signInDemo,
@@ -30,6 +31,7 @@ import {
 import { maxSubmissionBytes } from './api-contract';
 import { userNameFields } from './user-names.mjs';
 import { databaseErrorInfo } from '../../database/connection.mjs';
+import { periodMarksFields } from './period-marks.mjs';
 
 const COOKIE = 'studyhub_session';
 const BODY_LIMIT = 16 * 1024;
@@ -358,6 +360,14 @@ export function gradeMutation(request: NextRequest, lessonId: string, studentId:
     const session = await mutationSession(request, true);
     const input = await body(request, ['grade', 'status', 'version']);
     return json(await saveGrade(session.user!, lessonId, studentId, input));
+  });
+}
+
+export function periodMarksMutation(request: NextRequest) {
+  return execute(request, async () => {
+    const session = await mutationSession(request, true);
+    const input = await body(request, periodMarksFields);
+    return json(await savePeriodMarks(session.user!, input));
   });
 }
 

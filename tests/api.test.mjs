@@ -203,6 +203,130 @@ test('StudyHUB: API, permissions, forms and page routes', async (t) => {
     await peer.login(`peer-${suffix}@example.test`, password);
   });
 
+  await t.test(
+    'Checkpoint marks and ratings persist separately with permissions and version conflicts',
+    async () => {
+      const peerUser = (await admin.bootstrap()).users.find(
+        (user) => user.email === `peer-${suffix}@example.test`,
+      );
+      const value = {
+        groupId: group.id,
+        subjectId: subject.id,
+        studentId: studentUser.id,
+        ...lessonPeriod(campusDate()),
+        rk1: 0,
+        r1: 82.25,
+        rk2: null,
+        r2: 100,
+        version: 0,
+      };
+      const put = (client, body, status = 200) =>
+        client.call('/api/period-marks', { method: 'PUT', body }, status);
+      const find = async (client) =>
+        (await client.bootstrap()).periodMarks.find(
+          (row) =>
+            row.studentId === studentUser.id &&
+            row.semester === value.semester &&
+            row.academicYear === value.academicYear,
+        );
+      await put(student, value, 403);
+      await put(admin, value, 403);
+      const otherTeacher = new TestClient(baseUrl);
+      await otherTeacher.demo('teacher');
+      await put(otherTeacher, value, 403);
+      const guest = new TestClient(baseUrl);
+      await guest.session();
+      await put(guest, value, 401);
+      for (const invalid of ['90', -1, 100.01, 90.001])
+        await put(teacher, { ...value, r1: invalid }, 422);
+      for (const invalid of ['80', -0.01, 100.01, 90.001])
+        await put(teacher, { ...value, examScore: invalid }, 422);
+      await put(teacher, { ...value, finalGrade: 100 }, 422);
+      await put(teacher, { ...value, version: null }, 422);
+      await put(teacher, { ...value, studentId: 'demo-student-1' }, 422);
+      await teacher.call(
+        '/api/period-marks',
+        {
+          method: 'PUT',
+          body: value,
+          headers: { 'X-CSRF-Token': '' },
+        },
+        403,
+      );
+
+      await put(teacher, value);
+      assert.deepEqual(await find(student), {
+        ...value,
+        examScore: null,
+        finalGrade: null,
+        version: 1,
+      });
+      assert.deepEqual(await find(teacher), {
+        ...value,
+        examScore: null,
+        finalGrade: null,
+        version: 1,
+      });
+      assert.equal(await find(peer), undefined);
+      assert.equal(await find(otherTeacher), undefined);
+      await put(teacher, value, 409);
+      const race = await Promise.all([
+        put(teacher, { ...value, rk2: 75.5, version: 1 }, [200, 409]),
+        put(teacher, { ...value, rk2: 90.25, version: 1 }, [200, 409]),
+      ]);
+      assert.deepEqual(race.map(({ response }) => response.status).sort(), [200, 409]);
+      const winner = await find(student);
+      assert.equal(winner.version, 2);
+      assert.ok([75.5, 90.25].includes(winner.rk2));
+      await put(teacher, { ...value, examScore: 75.5, version: 2 });
+      assert.equal((await find(student)).finalGrade, 84.875);
+      assert.equal((await find(teacher)).examScore, 75.5);
+      await put(teacher, { ...value, r1: 60, version: 3 });
+      assert.equal((await find(student)).examScore, 75.5, 'Older payloads preserve the saved exam');
+      assert.equal((await find(student)).finalGrade, 78.2);
+      await put(teacher, { ...value, examScore: 1, version: 3 }, 409);
+      await put(teacher, { ...value, finalGrade: 99, version: 4 }, 422);
+      await put(teacher, {
+        ...value,
+        rk1: null,
+        r1: null,
+        rk2: null,
+        r2: null,
+        examScore: null,
+        version: 4,
+      });
+      assert.deepEqual(await find(student), {
+        ...value,
+        rk1: null,
+        r1: null,
+        rk2: null,
+        r2: null,
+        examScore: null,
+        finalGrade: null,
+        version: 5,
+      });
+      await put(teacher, { ...value, semester: value.semester === 1 ? 2 : 1 });
+      await put(teacher, { ...value, academicYear: value.academicYear - 1 });
+      await put(teacher, { ...value, studentId: peerUser.id, r1: 0.29 });
+      assert.equal((await peer.bootstrap()).periodMarks.length, 1);
+      assert.equal((await peer.bootstrap()).periodMarks[0].r1, 0.29);
+      await put(teacher, {
+        ...value,
+        studentId: peerUser.id,
+        r1: 0,
+        r2: 0,
+        examScore: 0,
+        version: 1,
+      });
+      assert.equal((await peer.bootstrap()).periodMarks[0].finalGrade, 0);
+      assert.equal((await peer.bootstrap()).periodMarks[0].examScore, 0);
+      assert.equal((await student.bootstrap()).periodMarks.length, 3);
+      assert.ok(
+        (await student.bootstrap()).periodMarks.every((row) => row.studentId === studentUser.id),
+      );
+    },
+  );
+
   await t.test('Directory editing validates values and detects stale versions', async () => {
     await admin.call(`/api/groups/${group.id}`, {
       method: 'PATCH',

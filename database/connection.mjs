@@ -7,9 +7,14 @@ import { migrateSqliteAcademic as migrateSqliteAcademicRules } from './migration
 import { migrateSqliteEveningSlots } from './migrations/evening-slots.mjs';
 import { migrateSqliteLessonArchive } from './migrations/lesson-archive.mjs';
 import { migrateSqliteUserNames } from './migrations/user-names.mjs';
+import { migrateSqlitePeriodMarks } from './migrations/period-marks.mjs';
 
-// Deliberate entry points for maintenance commands; neither runs on connection.
+// Academic data upgrades require explicit maintenance commands.
 export { migrateSqliteAcademic, migratePostgresAcademic } from './migrations/academic-data.mjs';
+export {
+  migrateSqlitePeriodMarks,
+  migratePostgresPeriodMarks,
+} from './migrations/period-marks.mjs';
 
 // Next.js can load server modules more than once; keep one pool per database/process.
 const runtimeKey = Symbol.for('studyhub.database.runtime');
@@ -206,6 +211,7 @@ async function connect(key) {
   migrateSqliteEveningSlots(sqlite);
   migrateSqliteLessonArchive(sqlite);
   migrateSqliteUserNames(sqlite);
+  migrateSqlitePeriodMarks(sqlite);
   chmodSync(filename, 0o600);
   const queue = serialQueue();
   const query = (sql, args) => {

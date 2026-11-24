@@ -137,6 +137,28 @@ export const gradesSchema = `
   );
 `;
 
+// Scores are stored in hundredths to retain exact values in SQLite and PostgreSQL.
+export const periodExamScoreColumn =
+  'exam_score INTEGER CHECK(exam_score IS NULL OR (exam_score BETWEEN 0 AND 10000 AND exam_score=CAST(exam_score AS INTEGER)))';
+export const periodMarksSchema = `
+  CREATE TABLE IF NOT EXISTS school_period_marks (
+    group_id TEXT NOT NULL REFERENCES school_groups(id),
+    subject_id TEXT NOT NULL REFERENCES school_subjects(id),
+    student_id TEXT NOT NULL REFERENCES auth_users(id),
+    academic_year INTEGER NOT NULL CHECK(academic_year BETWEEN 1900 AND 9999),
+    semester INTEGER NOT NULL CHECK(semester IN (1,2)),
+    rk1 INTEGER CHECK(rk1 IS NULL OR (rk1 BETWEEN 0 AND 10000 AND rk1=CAST(rk1 AS INTEGER))),
+    r1 INTEGER CHECK(r1 IS NULL OR (r1 BETWEEN 0 AND 10000 AND r1=CAST(r1 AS INTEGER))),
+    rk2 INTEGER CHECK(rk2 IS NULL OR (rk2 BETWEEN 0 AND 10000 AND rk2=CAST(rk2 AS INTEGER))),
+    r2 INTEGER CHECK(r2 IS NULL OR (r2 BETWEEN 0 AND 10000 AND r2=CAST(r2 AS INTEGER))),
+    ${periodExamScoreColumn},
+    version INTEGER NOT NULL DEFAULT 1 CHECK(version>=1),
+    PRIMARY KEY(group_id,subject_id,student_id,academic_year,semester)
+  );
+  CREATE INDEX IF NOT EXISTS school_period_marks_student
+    ON school_period_marks(student_id,academic_year,semester);
+`;
+
 export const learningSchema = `
   CREATE TABLE IF NOT EXISTS school_files (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, mime_type TEXT NOT NULL,
@@ -151,6 +173,7 @@ export const learningSchema = `
   );
   ${submissionsSchema}
   ${gradesSchema}
+  ${periodMarksSchema}
   CREATE TABLE IF NOT EXISTS school_attendance (
     lesson_id TEXT NOT NULL REFERENCES school_lessons(id), student_id TEXT NOT NULL REFERENCES auth_users(id),
     status TEXT NOT NULL CHECK(status IN ('present','absent','late','excused')),

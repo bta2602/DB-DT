@@ -36,6 +36,7 @@ import { AnnouncementsPanel } from './publication-panels';
 import { useBrowserStorage } from './use-browser-storage';
 import { StorageFeedback } from './storage-feedback';
 import { readUserName, UserNameFields } from './user-name-fields';
+import { StudentPeriodMarks } from './period-marks';
 import {
   defaultTaskFilters,
   isStudentTaskFilters,
@@ -674,6 +675,7 @@ export function SubjectsPage() {
           </button>
         ))}
       </div>
+      {tab === 'grades' && <StudentPeriodMarks subjectId={subject.id} />}
       {tab === 'grades' &&
         (grades.length ? (
           <div className="card table-wrap">
@@ -722,7 +724,7 @@ export function SubjectsPage() {
           </div>
         ) : (
           <EmptyState
-            title={t('Оценок пока нет')}
+            title={t('Оценок за занятия и задания пока нет')}
             description={t('Они появятся после проверки преподавателем.')}
           />
         ))}

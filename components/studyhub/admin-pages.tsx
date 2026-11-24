@@ -8,6 +8,8 @@ import { SearchField } from './search-field';
 import { SortHeading } from './sort-heading';
 import { sortRows, nextSort, type SortState } from '@/lib/studyhub/table-sort';
 import { LessonEditor } from './lesson-editor';
+import { ScheduleLessonCard } from './schedule-lesson-card';
+import scheduleStyles from './schedule.module.css';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type {
   Bootstrap,
@@ -208,10 +210,12 @@ export function LessonList({
   lessons,
   onEdit,
   now,
+  compact = false,
 }: {
   lessons: Lesson[];
   onEdit?: (lesson: Lesson) => void;
   now?: number;
+  compact?: boolean;
 }) {
   const { t } = useI18n();
   const { data, now: snapshotTime } = useStudyHub();
@@ -228,6 +232,9 @@ export function LessonList({
   return (
     <div className="schedule-list">
       {lessons.map((lesson) => {
+        if (compact) {
+          return <ScheduleLessonCard key={lesson.id} lesson={lesson} onEdit={onEdit} now={now} />;
+        }
         const status = lessonStatus(lesson, now ?? snapshotTime);
         const schedule = lessonSchedule(lesson, data.lessons);
         return (
@@ -707,7 +714,7 @@ export function SchedulePage() {
         });
   const shown = filtered.filter((lesson) => dates.includes(lessonDay(lesson))).length;
   return (
-    <>
+    <div className={scheduleStyles.page}>
       <PageHeading
         title={t('Расписание')}
         description={t('Занятия, преподаватели и аудитории.')}
@@ -720,7 +727,7 @@ export function SchedulePage() {
           )
         }
       />
-      <div className="control-panel">
+      <div className={`control-panel ${scheduleStyles.controls}`}>
         <div className="control-actions schedule-controls">
           <Field label={t('Дата')}>
             <input
@@ -794,7 +801,7 @@ export function SchedulePage() {
         <StorageFeedback status={storage.status} />
       </div>
       {admin && <SetupHint onOpen={() => setEditing('new')} />}
-      <div className={mode === 'week' ? 'publication-week' : ''}>
+      <div className={`${scheduleStyles.days} ${mode === 'week' ? scheduleStyles.week : ''}`}>
         {dates.map((day) => (
           <section key={day}>
             <h2 className="schedule-date-title">{formatDate(day, locale)}</h2>
@@ -806,6 +813,7 @@ export function SchedulePage() {
                 )}
               now={now}
               onEdit={admin ? setEditing : undefined}
+              compact
             />
           </section>
         ))}
@@ -817,7 +825,7 @@ export function SchedulePage() {
           onClose={() => setEditing(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 

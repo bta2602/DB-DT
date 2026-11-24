@@ -185,6 +185,7 @@ export function emptyData(): Bootstrap {
     assignments: [],
     submissions: [],
     grades: [],
+    periodMarks: [],
     attendance: [],
     materials: [],
     announcements: [],

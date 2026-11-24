@@ -149,6 +149,27 @@ export type Grade = {
   version: number;
 };
 
+/** Entered checkpoint marks, ratings and exam score with a calculated semester result. */
+export type PeriodMarks = {
+  groupId: Id;
+  subjectId: Id;
+  studentId: Id;
+  academicYear: number;
+  semester: 1 | 2;
+  rk1: number | null;
+  r1: number | null;
+  rk2: number | null;
+  r2: number | null;
+  examScore: number | null;
+  readonly finalGrade: number | null;
+  version: number;
+};
+
+/** Older clients can omit examScore and retain the saved exam result. */
+export type PeriodMarksInput = Omit<PeriodMarks, 'examScore' | 'finalGrade'> & {
+  examScore?: number | null;
+};
+
 export type Attendance = {
   lessonId: Id;
   studentId: Id;
@@ -182,6 +203,7 @@ export type Bootstrap = {
   assignments: Assignment[];
   submissions: Submission[];
   grades: Grade[];
+  periodMarks: PeriodMarks[];
   attendance: Attendance[];
   materials: Material[];
   announcements: Announcement[];
@@ -391,6 +413,13 @@ export const endpoints = {
     method: 'PUT',
     path: '/api/lessons/:id/grades/:studentId',
     request: 'GradeInput',
+    response: 'MutationResult',
+  },
+
+  periodMarks: {
+    method: 'PUT',
+    path: '/api/period-marks',
+    request: 'PeriodMarksInput',
     response: 'MutationResult',
   },
 

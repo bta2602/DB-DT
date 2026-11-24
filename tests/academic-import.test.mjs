@@ -4,8 +4,14 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { authSchema, schoolSchema, learningSchema } from '../database/schema.mjs';
+import {
+  authSchema,
+  schoolSchema,
+  learningSchema,
+  periodMarksSchema,
+} from '../database/schema.mjs';
 import { postgresSchema } from '../database/connection.mjs';
+import { periodExamScoreUpgrade } from '../database/migrations/period-marks.mjs';
 import { migrateSqliteAcademic as migrateBackendAcademic } from '../database/migrations/academic-rules.mjs';
 import {
   academicMigrationKey,
@@ -71,9 +77,10 @@ async function sourceFixture(t, academic = true) {
 
 // A recording adapter verifies importer transaction/order behavior with real SQLite rows.
 // PostgreSQL-only DDL is recorded, not executed: live PostgreSQL validation remains separate.
-function recordingTarget(t, { failInstallation = false } = {}) {
+function recordingTarget(t, { failInstallation = false, legacyPeriodMarks = false } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   const events = [];
+  let initialized = false;
   t.after(() => sqlite.close());
   const adapter = {
     dialect: 'postgres',
@@ -91,6 +98,17 @@ function recordingTarget(t, { failInstallation = false } = {}) {
           );
         }
         sqlite.exec(learningSchema);
+        if (legacyPeriodMarks && !initialized)
+          sqlite.exec('ALTER TABLE school_period_marks DROP COLUMN exam_score');
+        initialized = true;
+      } else if (sql === periodExamScoreUpgrade) {
+        if (
+          !sqlite
+            .prepare('PRAGMA table_info(school_period_marks)')
+            .all()
+            .some((column) => column.name === 'exam_score')
+        )
+          sqlite.exec(sql.replace(' IF NOT EXISTS', ''));
       } else if (sql.includes('CREATE OR REPLACE FUNCTION')) {
         events.push('install');
         assert.equal(sqlite.prepare('SELECT count(*) AS count FROM school_lessons').get().count, 3);
@@ -183,6 +201,66 @@ test('Importer copies academic rows before installing their rules, and repeats w
     target.sqlite.prepare("SELECT kind FROM school_lessons WHERE id='historic'").get().kind,
     'Практика',
   );
+});
+
+test('Importer retains separate checkpoint marks and ratings and accepts backups predating their table', async (t) => {
+  const filename = await sourceFixture(t);
+  const source = new DatabaseSync(filename);
+  try {
+    source.exec(periodMarksSchema);
+    source.exec(`INSERT INTO school_period_marks(group_id,subject_id,student_id,academic_year,semester,rk1,r1,rk2,r2,exam_score,version)
+      VALUES ('group','subject','student',2026,1,0,8225,NULL,10000,7550,3)`);
+  } finally {
+    source.close();
+  }
+  const snapshot = await readSqliteSnapshot(filename);
+  assert.equal(snapshot.manifest.counts.school_period_marks, 1);
+  const target = recordingTarget(t);
+  assert.equal((await importSqliteSnapshot(target.adapter, snapshot)).imported, true);
+  assert.deepEqual(
+    {
+      ...target.sqlite
+        .prepare('SELECT rk1,r1,rk2,r2,exam_score,version FROM school_period_marks')
+        .get(),
+    },
+    { rk1: 0, r1: 8225, rk2: null, r2: 10000, exam_score: 7550, version: 3 },
+  );
+  assert.equal((await importSqliteSnapshot(target.adapter, snapshot)).imported, false);
+  const older = await readSqliteSnapshot(await sourceFixture(t, false));
+  assert.equal(older.tables.school_period_marks, undefined);
+  const oldTarget = recordingTarget(t);
+  assert.equal((await importSqliteSnapshot(oldTarget.adapter, older)).imported, true);
+  assert.equal(
+    oldTarget.sqlite.prepare('SELECT count(*) AS count FROM school_period_marks').get().count,
+    0,
+  );
+});
+
+test('Importer upgrades pre-exam mark layouts with null exams and detects subsequent exam changes', async (t) => {
+  const filename = await sourceFixture(t);
+  const source = new DatabaseSync(filename);
+  try {
+    source.exec(periodMarksSchema);
+    source.exec(`ALTER TABLE school_period_marks DROP COLUMN exam_score;
+      INSERT INTO school_period_marks(group_id,subject_id,student_id,academic_year,semester,rk1,r1,rk2,r2,version)
+      VALUES ('group','subject','student',2026,1,0,8225,NULL,10000,3)`);
+  } finally {
+    source.close();
+  }
+  const snapshot = await readSqliteSnapshot(filename);
+  const target = recordingTarget(t, { legacyPeriodMarks: true });
+  assert.equal((await importSqliteSnapshot(target.adapter, snapshot)).imported, true);
+  assert.deepEqual(
+    {
+      ...target.sqlite
+        .prepare('SELECT rk1,r1,rk2,r2,exam_score,version FROM school_period_marks')
+        .get(),
+    },
+    { rk1: 0, r1: 8225, rk2: null, r2: 10000, exam_score: null, version: 3 },
+  );
+  assert.equal((await importSqliteSnapshot(target.adapter, snapshot)).imported, false);
+  target.sqlite.exec('UPDATE school_period_marks SET exam_score=0');
+  await assert.rejects(importSqliteSnapshot(target.adapter, snapshot), /баллы экзамена/);
 });
 
 test('Importer rolls back copied rows and markers if academic object installation fails', async (t) => {

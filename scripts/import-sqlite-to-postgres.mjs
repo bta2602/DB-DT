@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
 import { closeDatabase, getDatabase, postgresSchema } from '../database/connection.mjs';
 import { academicSeedMapSchema } from '../database/schema.mjs';
+import { periodExamScoreUpgrade } from '../database/migrations/period-marks.mjs';
 import {
   lessonArchiveIndexes,
   lessonArchiveMigrationKey,
@@ -38,8 +39,8 @@ const importedTables = [
   'studyhub_settings',
 ];
 const temporaryTables = ['auth_sessions', 'auth_limits'];
-// Backend-only databases do not have the explicit academic data extension yet.
-const optionalTables = ['school_academic_seed_map'];
+// Earlier backups predate the academic extension and separate semester marks.
+const optionalTables = ['school_academic_seed_map', 'school_period_marks'];
 const allTables = [...importedTables, ...optionalTables, ...temporaryTables];
 
 function snapshotTableNames(tables) {
@@ -268,6 +269,14 @@ async function verifyTarget(db, snapshot) {
       );
     }
   }
+  const periodSource = snapshot.tables.school_period_marks;
+  if (periodSource && !periodSource.columns.some((column) => column.name === 'exam_score')) {
+    const extra = await db
+      .prepare('SELECT count(*) AS count FROM school_period_marks WHERE exam_score IS NOT NULL')
+      .get();
+    if (Number(extra.count))
+      throw new ImportError('В целевой базе появились баллы экзамена, отсутствующие в снимке.');
+  }
 }
 
 export async function importSqliteSnapshot(db, snapshot) {
@@ -277,6 +286,7 @@ export async function importSqliteSnapshot(db, snapshot) {
   // CREATE IF NOT EXISTS adds schema objects; it never clears existing records.
   await db.exec(postgresSchema);
   return db.transaction(async (tx) => {
+    await tx.exec(periodExamScoreUpgrade);
     await tx.exec(academicSeedMapSchema);
     const marker = await tx
       .prepare('SELECT value FROM studyhub_settings WHERE key=?')

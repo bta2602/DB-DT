@@ -102,6 +102,8 @@ try {
       'tests/schedule-filters.test.mjs',
       'tests/deadlines.test.mjs',
       'tests/grading.test.mjs',
+      'tests/period-marks.test.mjs',
+      'tests/final-grade.test.mjs',
       'tests/i18n.test.mjs',
       'tests/storage.test.mjs',
       'tests/academic-rules.test.mjs',
